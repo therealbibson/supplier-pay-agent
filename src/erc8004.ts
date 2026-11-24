@@ -66,13 +66,18 @@ async function main() {
   const receipt = await publicClient.waitForTransactionReceipt({ hash })
   console.log(`Registration tx: ${CELOSCAN}/tx/${hash}`)
 
-  // The agent ID comes from the Registered event on the receipt. Per the
-  // ERC-8004 spec the first indexed topic is the agent ID; confirm it on
-  // Celoscan before using it anywhere.
+  // The agent ID is the ERC-721 token ID. The receipt's first registry log
+  // is the Transfer mint (topics[1] is the zero from-address, NOT the ID),
+  // so read topics[3] of the Transfer log — that is the token ID. Confirm
+  // it on Celoscan before using it anywhere.
+  const TRANSFER_SIG =
+    '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
   const log = receipt.logs.find(
-    (l) => l.address.toLowerCase() === IDENTITY_REGISTRY.toLowerCase(),
+    (l) =>
+      l.address.toLowerCase() === IDENTITY_REGISTRY.toLowerCase() &&
+      l.topics[0] === TRANSFER_SIG,
   )
-  const agentId = log?.topics[1] ? BigInt(log.topics[1] as Hex) : undefined
+  const agentId = log?.topics[3] ? BigInt(log.topics[3] as Hex) : undefined
   if (agentId === undefined) {
     console.log(
       'Could not decode the agent ID from the receipt — open the tx on Celoscan and read it from the Registered event.',
