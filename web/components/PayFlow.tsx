@@ -586,12 +586,6 @@ export function PayFlow({
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      {!isConnected && (
-        <div className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-          Connect your wallet above to start a payment.
-        </div>
-      )}
-
       {isConnected && !onCelo && (
         <div className="mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">
           Your wallet is on the wrong network. Switch to Celo mainnet to
