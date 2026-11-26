@@ -127,8 +127,10 @@ export function PayFlow({
   const ready = onCelo && !!address && !!publicClient && !!walletClient;
 
   // Token decimals + balances (decimals are read on-chain, never guessed).
+  // Gated on address: no chain RPC call happens before the user connects
+  // their wallet — the form is disabled until then anyway.
   useEffect(() => {
-    if (!publicClient) return;
+    if (!publicClient || !address) return;
     let cancelled = false;
     (async () => {
       try {
@@ -148,7 +150,7 @@ export function PayFlow({
     return () => {
       cancelled = true;
     };
-  }, [publicClient, currency]);
+  }, [publicClient, currency, address]);
 
   useEffect(() => {
     if (!publicClient || !address) {

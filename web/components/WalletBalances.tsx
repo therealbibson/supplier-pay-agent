@@ -4,44 +4,172 @@ import { useEffect, useState } from "react";
 import { formatUnits } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 import { CELOSCAN, TOKENS } from "@/lib/config";
-import { tokenBalance } from "@/lib/execute";
+import { tokenBalance, tokenDecimals } from "@/lib/execute";
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
+type BalanceCoin =
+  | "USD_T"
+  | "cNGN"
+  | "IDRX"
+  | "wBRL"
+  | "wARS"
+  | "wMXN"
+  | "wCOP"
+  | "CELO";
+
+interface CoinDef {
+  key: BalanceCoin;
+  symbol: string;
+  /** ERC-20 address; absent for native CELO. */
+  token?: keyof typeof TOKENS;
+}
+
+const COINS: CoinDef[] = [
+  { key: "USD_T", symbol: "USD₮", token: "USD_T" },
+  { key: "cNGN", symbol: "cNGN", token: "cNGN" },
+  { key: "IDRX", symbol: "IDRX", token: "IDRX" },
+  { key: "wBRL", symbol: "wBRL", token: "wBRL" },
+  { key: "wARS", symbol: "wARS", token: "wARS" },
+  { key: "wMXN", symbol: "wMXN", token: "wMXN" },
+  { key: "wCOP", symbol: "wCOP", token: "wCOP" },
+  { key: "CELO", symbol: "CELO" },
+];
+
+/**
+ * Display-only preferences, stored in localStorage so they stick across
+ * visits. They reveal nothing sensitive — just whether amounts are masked
+ * and which coin is shown big.
+ */
+const HIDE_KEY = "paybridge.hideBalances";
+const COIN_KEY = "paybridge.balanceCoin";
+
+function EyeIcon({ off }: { off?: boolean }) {
+  return (
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {off ? (
+        <>
+          <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+          <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+          <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.59 9.59 0 0 0 5.39-1.61" />
+          <line x1="2" y1="2" x2="22" y2="22" />
+        </>
+      ) : (
+        <>
+          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+          <circle cx="12" cy="12" r="3" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 /**
  * Wallet balance card — the top of a normal wallet home screen.
- * USD₮ is the money you spend, shown large; CELO (gas) and cNGN sit
- * beneath. Balances are read on-chain from your connected wallet.
+ *
+ * - Coin switcher: USD₮, cNGN, IDRX, wBRL, wARS, wMXN, wCOP, CELO. The
+ *   selected coin's balance is the large number; the rest show small
+ *   beneath. Every balance is read on-chain from the connected wallet
+ *   (decimals read on-chain too, never guessed); CELO is the native
+ *   balance (18 decimals).
+ * - Eye toggle: hides every amount on the card behind "••••••".
+ * - Gated on connection: before the user connects, the card shows only
+ *   "Connect your wallet above to see your balances" — no address, no
+ *   balance, and no chain call is made.
  */
 export function WalletBalances() {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
-  const [usdt, setUsdt] = useState<bigint | null>(null);
-  const [celo, setCelo] = useState<bigint | null>(null);
-  const [cngn, setCngn] = useState<bigint | null>(null);
+  const [hidden, setHidden] = useState(false);
+  const [coin, setCoin] = useState<BalanceCoin>("USD_T");
+  const [balances, setBalances] =
+    useState<Partial<Record<BalanceCoin, bigint | null>>>({});
+  const [decimals, setDecimals] =
+    useState<Partial<Record<BalanceCoin, number>>>({});
 
+  // Load display preferences on the client (defaults render on the server,
+  // so there is no hydration mismatch).
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(HIDE_KEY) === "1") setHidden(true);
+      const c = window.localStorage.getItem(COIN_KEY);
+      if (c && COINS.some((x) => x.key === c)) setCoin(c as BalanceCoin);
+    } catch {
+      // Storage unavailable (private mode, etc.) — defaults stand.
+    }
+  }, []);
+
+  function toggleHidden() {
+    const next = !hidden;
+    setHidden(next);
+    try {
+      window.localStorage.setItem(HIDE_KEY, next ? "1" : "0");
+    } catch {
+      // Ignore storage failures.
+    }
+  }
+
+  function selectCoin(c: BalanceCoin) {
+    setCoin(c);
+    try {
+      window.localStorage.setItem(COIN_KEY, c);
+    } catch {
+      // Ignore storage failures.
+    }
+  }
+
+  // Balances + decimals, read on-chain from the connected wallet.
+  // Gated on address: nothing is fetched before the user connects.
   useEffect(() => {
     if (!publicClient || !address) {
-      setUsdt(null);
-      setCelo(null);
-      setCngn(null);
+      setBalances({});
+      setDecimals({});
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        const [u, c, n] = await Promise.all([
-          tokenBalance(publicClient, TOKENS.USD_T, address),
-          publicClient.getBalance({ address }),
-          tokenBalance(publicClient, TOKENS.cNGN, address),
+        const tokenCoins = COINS.filter(
+          (c): c is CoinDef & { token: keyof typeof TOKENS } => !!c.token,
+        );
+        const [decList, balList, celoBal] = await Promise.all([
+          Promise.all(
+            tokenCoins.map((c) =>
+              tokenDecimals(publicClient, TOKENS[c.token]).catch(() => null),
+            ),
+          ),
+          Promise.all(
+            tokenCoins.map((c) =>
+              tokenBalance(publicClient, TOKENS[c.token], address).catch(
+                () => null,
+              ),
+            ),
+          ),
+          publicClient.getBalance({ address }).catch(() => null),
         ]);
-        if (!cancelled) {
-          setUsdt(u);
-          setCelo(c);
-          setCngn(n);
-        }
+        if (cancelled) return;
+        const d: Partial<Record<BalanceCoin, number>> = { CELO: 18 };
+        const b: Partial<Record<BalanceCoin, bigint | null>> = {
+          CELO: celoBal,
+        };
+        tokenCoins.forEach((c, i) => {
+          if (decList[i] !== null) d[c.key] = decList[i] as number;
+          b[c.key] = balList[i];
+        });
+        setDecimals(d);
+        setBalances(b);
       } catch {
         // Balances are a display convenience; the pay flow re-checks.
       }
@@ -51,36 +179,101 @@ export function WalletBalances() {
     };
   }, [publicClient, address]);
 
+  const selected = COINS.find((c) => c.key === coin) ?? COINS[0];
+  const selectedBalance = balances[coin] ?? null;
+  const selectedDecimals = decimals[coin];
+  const celoBalance = balances.CELO ?? null;
+
+  function formatAmount(
+    value: bigint | null,
+    dec: number | undefined,
+    symbol: string,
+  ): string {
+    if (hidden) return `•••••• ${symbol}`;
+    if (value === null || value === undefined || dec === undefined)
+      return `— ${symbol}`;
+    return `${formatUnits(value, dec)} ${symbol}`;
+  }
+
+  function formatSmall(
+    value: bigint | null | undefined,
+    dec: number | undefined,
+  ): string {
+    if (hidden) return "••••••";
+    if (value === null || value === undefined || dec === undefined) return "—";
+    return formatUnits(value, dec);
+  }
+
   return (
     <section className="rounded-2xl bg-green-600 p-6 text-white shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-widest text-green-100">
-        Your wallet
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-green-100">
+            Your wallet
+          </p>
+          {isConnected && address && (
+            <p className="mt-1 font-mono text-xs text-green-100">
+              {shortAddress(address)}
+            </p>
+          )}
+        </div>
+        {isConnected && address && (
+          <button
+            type="button"
+            onClick={toggleHidden}
+            aria-label={hidden ? "Show balances" : "Hide balances"}
+            title={hidden ? "Show balances" : "Hide balances"}
+            className="rounded-full bg-green-700 p-2 text-green-100 transition hover:bg-green-800"
+          >
+            <EyeIcon off={hidden} />
+          </button>
+        )}
+      </div>
+
       {isConnected && address ? (
         <>
-          <p className="mt-1 font-mono text-xs text-green-100">
-            {shortAddress(address)}
-          </p>
-          <p className="mt-4 text-4xl font-extrabold tracking-tight">
-            {usdt === null
-              ? "—"
-              : `${formatUnits(usdt, 6)} USD₮`}
-          </p>
-          <div className="mt-4 space-y-1 border-t border-green-500 pt-4 text-sm">
-            <p className="flex justify-between gap-4">
-              <span className="text-green-100">CELO · for gas</span>
-              <span className="font-semibold">
-                {celo === null ? "—" : formatUnits(celo, 18)}
-              </span>
-            </p>
-            <p className="flex justify-between gap-4">
-              <span className="text-green-100">cNGN</span>
-              <span className="font-semibold">
-                {cngn === null ? "—" : formatUnits(cngn, 6)}
-              </span>
-            </p>
+          <div
+            className="mt-4 flex flex-wrap gap-1.5"
+            role="tablist"
+            aria-label="Balance currency"
+          >
+            {COINS.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                role="tab"
+                aria-selected={coin === c.key}
+                onClick={() => selectCoin(c.key)}
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+                  coin === c.key
+                    ? "bg-white text-green-700"
+                    : "bg-green-700 text-green-100 hover:bg-green-800"
+                }`}
+              >
+                {c.symbol}
+              </button>
+            ))}
           </div>
-          {celo !== null && celo === 0n && (
+
+          <p className="mt-3 text-4xl font-extrabold tracking-tight">
+            {formatAmount(selectedBalance, selectedDecimals, selected.symbol)}
+          </p>
+
+          <div className="mt-4 space-y-1 border-t border-green-500 pt-4 text-sm">
+            {COINS.filter((c) => c.key !== coin).map((c) => (
+              <p key={c.key} className="flex justify-between gap-4">
+                <span className="text-green-100">
+                  {c.symbol}
+                  {c.key === "CELO" ? " · for gas" : ""}
+                </span>
+                <span className="font-semibold">
+                  {formatSmall(balances[c.key], decimals[c.key])}
+                </span>
+              </p>
+            ))}
+          </div>
+
+          {!hidden && celoBalance !== null && celoBalance === 0n && (
             <p className="mt-3 rounded-xl bg-green-700 px-3 py-2 text-xs text-green-50">
               Your CELO balance is 0 — you need a little CELO to pay for gas
               before you can send anything.
