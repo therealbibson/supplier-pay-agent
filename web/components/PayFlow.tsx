@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { erc20Abi, formatUnits, isAddress, parseUnits, type Address, type Hex } from "viem";
 import { formatDecimalAmount, formatTokenAmount } from "@/lib/format";
@@ -168,6 +168,15 @@ export function PayFlow({
   const [checkingFill, setCheckingFill] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewNonce, setPreviewNonce] = useState(0);
+  // Whether the on-chain token-details load (decimals + balances) has
+  // finished. The live estimate cannot run until the selected coins'
+  // decimals are known, and a transient RPC failure used to stall the
+  // form forever with no message — so the form now says so and offers
+  // a retry instead of stalling silently.
+  const [tokenDetailsState, setTokenDetailsState] = useState<
+    "idle" | "loading" | "done"
+  >("idle");
+  const tokenDetailsRunRef = useRef(0);
 
   const progressRef = useRef<{
     approvalHash: Hex | null;
@@ -201,6 +210,33 @@ export function PayFlow({
   const buyDecimals = allDecimals[currency] ?? 6;
   const sellBalance = allBalances[sellCurrency] ?? null;
 
+  // Hints for the silent stalls: the live estimate shows nothing at all
+  // when the supplier address is invalid, the amount is below the 1-unit
+  // minimum, or the selected coins' decimals never loaded — so the form
+  // now says so under the relevant field instead of stalling silently.
+  const supplierTrimmed = supplier.trim();
+  const supplierIsOwnAddress =
+    !!address && supplierTrimmed.toLowerCase() === address.toLowerCase();
+  const supplierInvalid =
+    supplierTrimmed !== "" &&
+    (!isAddress(supplierTrimmed) || supplierIsOwnAddress);
+  const amountTrimmed = amount.trim();
+  const amountNum = Number(amountTrimmed);
+  const amountBelowMin =
+    /^\d+(\.\d+)?$/.test(amountTrimmed) &&
+    !Number.isNaN(amountNum) &&
+    amountNum > 0 &&
+    amountNum < 1;
+  const decimalsMissing =
+    ready &&
+    (allDecimals[sellCurrency] === undefined ||
+      allDecimals[currency] === undefined);
+  const inputsEntered = supplierTrimmed !== "" || amountTrimmed !== "";
+  const tokenDetailsLoading =
+    decimalsMissing && inputsEntered && tokenDetailsState !== "done";
+  const tokenDetailsFailed =
+    decimalsMissing && inputsEntered && tokenDetailsState === "done";
+
   // Load the persisted send currency on the client.
   useEffect(() => {
     try {
@@ -216,53 +252,61 @@ export function PayFlow({
     }
   }, []);
 
-  // Token decimals + balances for every sendable stablecoin, plus the
-  // native CELO balance for the gas warning. Decimals are read on-chain,
-  // never guessed (IDRX, for example, is 2 decimals, not 6).
+  // Load token decimals + balances for every sendable stablecoin, plus
+  // the native CELO balance for the gas warning. Decimals are read
+  // on-chain, never guessed (IDRX, for example, is 2 decimals, not 6).
   // Gated on address: no chain RPC call happens before the user connects
   // their wallet — the form is disabled until then anyway.
+  // Extracted as a callback so the "Couldn't load token details" retry
+  // can re-run exactly the same load (decimals AND balances). A run id
+  // drops stale responses when the wallet or client changes mid-load.
+  const loadTokenDetails = useCallback(async () => {
+    if (!publicClient || !address) return;
+    const runId = ++tokenDetailsRunRef.current;
+    setTokenDetailsState("loading");
+    try {
+      const keys = SENDABLE_COINS.map((c) => c.key as FlowCurrency);
+      const [decList, balList, celoBal] = await Promise.all([
+        Promise.all(
+          keys.map((k) =>
+            tokenDecimals(publicClient, TOKENS[k]).catch(() => null),
+          ),
+        ),
+        Promise.all(
+          keys.map((k) =>
+            tokenBalance(publicClient, TOKENS[k], address).catch(() => null),
+          ),
+        ),
+        publicClient.getBalance({ address }).catch(() => null),
+      ]);
+      if (tokenDetailsRunRef.current !== runId) return;
+      const d: Partial<Record<FlowCurrency, number>> = {};
+      const b: Partial<Record<FlowCurrency, bigint | null>> = {};
+      keys.forEach((k, i) => {
+        if (decList[i] !== null) d[k] = decList[i] as number;
+        b[k] = balList[i];
+      });
+      setAllDecimals(d);
+      setAllBalances(b);
+      setCeloBalance(celoBal);
+      setTokenDetailsState("done");
+    } catch {
+      // Balances are a convenience display; the flow re-checks before sending.
+      if (tokenDetailsRunRef.current !== runId) return;
+      setTokenDetailsState("done");
+    }
+  }, [publicClient, address]);
+
   useEffect(() => {
     if (!publicClient || !address) {
       setAllDecimals({});
       setAllBalances({});
       setCeloBalance(null);
+      setTokenDetailsState("idle");
       return;
     }
-    let cancelled = false;
-    (async () => {
-      try {
-        const keys = SENDABLE_COINS.map((c) => c.key as FlowCurrency);
-        const [decList, balList, celoBal] = await Promise.all([
-          Promise.all(
-            keys.map((k) =>
-              tokenDecimals(publicClient, TOKENS[k]).catch(() => null),
-            ),
-          ),
-          Promise.all(
-            keys.map((k) =>
-              tokenBalance(publicClient, TOKENS[k], address).catch(() => null),
-            ),
-          ),
-          publicClient.getBalance({ address }).catch(() => null),
-        ]);
-        if (cancelled) return;
-        const d: Partial<Record<FlowCurrency, number>> = {};
-        const b: Partial<Record<FlowCurrency, bigint | null>> = {};
-        keys.forEach((k, i) => {
-          if (decList[i] !== null) d[k] = decList[i] as number;
-          b[k] = balList[i];
-        });
-        setAllDecimals(d);
-        setAllBalances(b);
-        setCeloBalance(celoBal);
-      } catch {
-        // Balances are a convenience display; the flow re-checks before sending.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [publicClient, address]);
+    void loadTokenDetails();
+  }, [publicClient, address, loadTokenDetails]);
 
   // Keep the sell-balance ref fresh for the async preview handler.
   useEffect(() => {
@@ -289,7 +333,10 @@ export function PayFlow({
 
   // Live estimate: fetch a preview quote automatically as the user types.
   // Only runs when the wallet is connected on Celo and the inputs are
-  // valid; incomplete input shows no estimate and no error banner.
+  // valid. Invalid or incomplete input shows no estimate — the field
+  // hints below the To / Amount fields, and the token-details line where
+  // the estimate would appear, explain why instead of leaving the form
+  // silent.
   useEffect(() => {
     // Any new run invalidates a preview fetch scheduled or in flight from a
     // previous run, so fast typing can never show a stale estimate.
@@ -318,7 +365,10 @@ export function PayFlow({
     }
     // Decimals are read on-chain and arrive just after connecting; don't
     // quote until both are known, or an amount would be parsed with the
-    // wrong scale (IDRX is 2 decimals, wFIAT tokens are 18).
+    // wrong scale (IDRX is 2 decimals, wFIAT tokens are 18). The form
+    // shows "Loading token details…" while they load and a retry line if
+    // the load finished without them, so this gate no longer stalls
+    // silently.
     if (
       allDecimals[sellCurrency] === undefined ||
       allDecimals[currency] === undefined
@@ -723,6 +773,13 @@ export function PayFlow({
               disabled={!ready || busy}
               className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm text-slate-800 placeholder:text-slate-400 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
             />
+            {supplierInvalid && (
+              <p className="mt-1 text-xs text-amber-700">
+                {supplierIsOwnAddress
+                  ? "That's your own address — enter your supplier's address."
+                  : "Enter a valid supplier address (0x…)."}
+              </p>
+            )}
           </div>
 
           {/* Plain block children, NOT a grid wrapper: a single implicit
@@ -768,6 +825,20 @@ export function PayFlow({
               >
                 <CoinIcon coin={sellCoin} size={24} />
                 {sellCoin.symbol}
+                {/* Small down-chevron, like the balance card's selector
+                    row, so users can tell this opens a dropdown. */}
+                <svg
+                  aria-hidden="true"
+                  className="h-4 w-4 shrink-0 text-slate-400"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
               </button>
               <button
                 type="button"
@@ -784,6 +855,11 @@ export function PayFlow({
               <p className="mt-1 text-xs text-slate-500">
                 Balance: {formatTokenAmount(sellBalance, sellDecimals)}{" "}
                 {sellCoin.symbol}
+              </p>
+            )}
+            {amountBelowMin && (
+              <p className="mt-1 text-xs text-amber-700">
+                Minimum amount is 1.
               </p>
             )}
           </div>
@@ -807,6 +883,20 @@ export function PayFlow({
               <span className="min-w-0 flex-1 truncate font-normal text-slate-500">
                 — {receiveCoin.name}
               </span>
+              {/* Small down-chevron, like the balance card's selector
+                  row, so users can tell this opens a dropdown. */}
+              <svg
+                aria-hidden="true"
+                className="h-4 w-4 shrink-0 text-slate-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
             </button>
             {celoBalance !== null && celoBalance === 0n && (
               <p className="mt-1 text-xs text-amber-700">
@@ -834,6 +924,30 @@ export function PayFlow({
 
           {previewLoading && (
             <p className="text-xs text-slate-500">Getting estimate…</p>
+          )}
+
+          {/* Token details are the estimate's missing piece: if the
+              selected coins' decimals never loaded, the preview cannot
+              run. Say so where the estimate would appear — a loading
+              line while the load is in flight, and a retry line (which
+              re-fetches decimals AND balances) once it has failed. */}
+          {tokenDetailsLoading && (
+            <p className="text-xs text-slate-500">Loading token details…</p>
+          )}
+          {tokenDetailsFailed && (
+            <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
+              <p className="font-medium">
+                Couldn't load token details — the estimate can't run without
+                them.
+              </p>
+              <button
+                type="button"
+                onClick={() => void loadTokenDetails()}
+                className="mt-2 rounded-full bg-amber-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-amber-800"
+              >
+                Try again
+              </button>
+            </div>
           )}
 
           {/* Send and receive currency pickers — the same shared
