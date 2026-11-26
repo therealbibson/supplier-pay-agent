@@ -542,13 +542,6 @@ export function PayFlow({
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <h2 className="text-xl font-bold text-slate-800">Send payment</h2>
-      <p className="mt-1 text-sm text-slate-500">
-        Pay a supplier in their local stablecoin. You pay from your own
-        wallet on Celo mainnet — nothing is sent until you approve each step
-        in your wallet.
-      </p>
-
       {!isConnected && (
         <div className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
           Connect your wallet above to start a payment.
