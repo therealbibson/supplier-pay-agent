@@ -136,6 +136,12 @@ export function PayFlow({
   const reportedRef = useRef(false);
   const previewReqRef = useRef(0);
   const lastPreviewKeyRef = useRef("");
+  // MAX auto-adjust: tracks whether the current amount came from tapping
+  // MAX, how many times it has already been shrunk to fit the fee, and a
+  // fresh copy of the USD₮ balance for the async preview handler.
+  const fromMaxRef = useRef(false);
+  const maxAdjustCountRef = useRef(0);
+  const usdtBalanceRef = useRef<bigint | null>(null);
 
   const onCelo = isConnected && chainId === CHAIN.id;
   const ready = onCelo && !!address && !!publicClient && !!walletClient;
@@ -191,6 +197,11 @@ export function PayFlow({
       cancelled = true;
     };
   }, [publicClient, address]);
+
+  // Keep the balance ref fresh for the async preview handler.
+  useEffect(() => {
+    usdtBalanceRef.current = usdtBalance;
+  }, [usdtBalance]);
 
   // Firm-quote expiry countdown.
   useEffect(() => {
@@ -262,6 +273,32 @@ export function PayFlow({
             );
             return;
           }
+          // MAX auto-adjust: the amount came from MAX and the fee pushes
+          // takerPays over the balance, so shrink the amount to
+          // (balance − fee) and let the debounced preview re-run with the
+          // adjusted amount. At most 2 adjustments per MAX tap — after
+          // that the fee-guard warning below takes over instead.
+          const maxBalance = usdtBalanceRef.current;
+          if (
+            fromMaxRef.current &&
+            maxBalance !== null &&
+            BigInt(p.takerPays) > maxBalance &&
+            maxAdjustCountRef.current < 2
+          ) {
+            const adjusted = maxBalance - BigInt(p.feeAmount);
+            const adjustedText = formatDecimalAmount(
+              formatUnits(adjusted, sellDecimals),
+            ).replace(/,/g, "");
+            if (adjusted > 0n && Number(adjustedText) >= 1) {
+              maxAdjustCountRef.current += 1;
+              lastPreviewKeyRef.current = key;
+              setError(null);
+              setPreview(p);
+              setStage("preview");
+              setAmount(adjustedText);
+              return;
+            }
+          }
           lastPreviewKeyRef.current = key;
           setError(null);
           setPreview(p);
@@ -279,9 +316,14 @@ export function PayFlow({
 
   // MAX: fill the amount with the full USD₮ balance. Clean, parseable
   // number — at most 4 decimal places, no thousands separators — so the
-  // live estimate picks it up exactly like a typed value.
+  // live estimate picks it up exactly like a typed value. The fee is
+  // deducted automatically once the preview comes back (see the preview
+  // handler): if amount + fee exceeds the balance, the amount is shrunk
+  // to (balance − fee) instead of warning.
   function fillMax() {
     if (usdtBalance === null || usdtBalance === 0n) return;
+    fromMaxRef.current = true;
+    maxAdjustCountRef.current = 0;
     const value = formatDecimalAmount(
       formatUnits(usdtBalance, sellDecimals),
     ).replace(/,/g, "");
@@ -501,6 +543,8 @@ export function PayFlow({
     setTxs({});
     setFilledBuyAmount(null);
     setAttributionOk(null);
+    fromMaxRef.current = false;
+    maxAdjustCountRef.current = 0;
     reportedRef.current = false;
     progressRef.current = {
       approvalHash: null,
@@ -602,7 +646,12 @@ export function PayFlow({
                   id="amount"
                   inputMode="decimal"
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onChange={(e) => {
+                    // Any manual edit means the amount no longer came from
+                    // MAX, so the fee is no longer deducted automatically.
+                    fromMaxRef.current = false;
+                    setAmount(e.target.value);
+                  }}
                   placeholder="0.00"
                   disabled={!ready || busy}
                   className="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-3 text-lg font-semibold text-slate-800 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
@@ -715,15 +764,6 @@ export function PayFlow({
               amount slightly.
             </p>
           )}
-          <div className="mt-4 rounded-xl bg-green-50 p-4 text-xs leading-relaxed text-green-900">
-            <p className="font-semibold">About the next step</p>
-            <p className="mt-1">
-              Your wallet will ask you to sign a message proving you control
-              this wallet. A signature cannot move your funds — it only proves
-              ownership to Textile so they give you a firm quote. You can
-              reject it safely and nothing happens.
-            </p>
-          </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
