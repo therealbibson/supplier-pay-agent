@@ -11,6 +11,18 @@
   --font-sans: var(--font-inter);
 }
 
+/**
+ * MiniPay green is the app-wide green: the balance card's exact green
+ * (#06955e, sampled from MiniPay's own app screen) replaces Tailwind's
+ * green-600 (#16a34a) everywhere, and a darkened shade of it (#057a4c,
+ * same hue) replaces green-700 (#15803d) for hover states. Light tints
+ * (green-50 / green-100 / green-200) are untouched.
+ */
+@theme {
+  --color-green-600: #06955e;
+  --color-green-700: #057a4c;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
