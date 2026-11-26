@@ -55,6 +55,28 @@ needed for the keyless flow; none is configured or committed.
 app never auto-sends anything — every on-chain step asks for confirmation
 in the wallet.
 
+## The wallet
+
+The home page is a wallet, not a landing page: a balance card (USD₮
+large, CELO for gas and cNGN beneath), a Send-style pay flow, recent
+payments, and a trust strip ("Non-custodial — your keys never leave your
+wallet"). How it works and the live proof live on their own page at
+`/how-it-works`, which also has a plain-language safety section.
+
+**History** (`/history`, linked from the wallet tabs) shows the connected
+wallet's real on-chain history, synced live from Celo via the Blockscout
+v2 API through `GET /api/history` (server-side proxy, no API key). The
+route merges Blockscout's `/transactions` and `/token-transfers`
+endpoints — the transactions list does not embed token transfers, so both
+are needed — dedupes by transaction hash, and flags PayBridge activity
+(swaps into the Textile reactor, payouts in a local stablecoin,
+approvals whose spender is the reactor). Paging is cursor-based per
+source (Blockscout's `next_page_params` shape varies and is forwarded
+verbatim as opaque base64url cursors; an exhausted source is marked
+done so it is not re-fetched). The home page's Recent payments is a
+preview of the same on-chain data — one source of truth, no separate
+session history. Payments appear once confirmed on-chain.
+
 ## What still needs doing to put it live
 
 1. **Push `web/` to GitHub** (not done here).

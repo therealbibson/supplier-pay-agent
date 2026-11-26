@@ -83,7 +83,12 @@ const STEP_LABELS: Record<ExecStep, string> = {
   done: "Done",
 };
 
-export function PayFlow() {
+export function PayFlow({
+  onPaymentDone,
+}: {
+  /** Called once when a payment completes, so the history preview can refresh. */
+  onPaymentDone?: () => void;
+}) {
   const { address, isConnected, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
@@ -116,6 +121,7 @@ export function PayFlow() {
     payoutHash: Hex | null;
     submitted: boolean;
   }>({ approvalHash: null, swapHash: null, payoutHash: null, submitted: false });
+  const reportedRef = useRef(false);
 
   const onCelo = isConnected && chainId === CHAIN.id;
   const ready = onCelo && !!address && !!publicClient && !!walletClient;
@@ -302,6 +308,10 @@ export function PayFlow() {
     setAttributionOk(!!codes && codes.includes(ATTRIBUTION_TAG));
     setExecStep("done");
     setStage("done");
+    if (!reportedRef.current && firm.quote) {
+      reportedRef.current = true;
+      onPaymentDone?.();
+    }
   }
 
   async function checkFillAgain() {
@@ -429,6 +439,7 @@ export function PayFlow() {
     setTxs({});
     setFilledBuyAmount(null);
     setAttributionOk(null);
+    reportedRef.current = false;
     progressRef.current = {
       approvalHash: null,
       swapHash: null,
@@ -459,10 +470,11 @@ export function PayFlow() {
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-      <h2 className="text-xl font-bold text-slate-800">Pay a supplier</h2>
+      <h2 className="text-xl font-bold text-slate-800">Send payment</h2>
       <p className="mt-1 text-sm text-slate-500">
-        You pay from your connected wallet on Celo mainnet. Nothing is sent
-        until you confirm each step.
+        Pay a supplier in their local stablecoin. You pay from your own
+        wallet on Celo mainnet — nothing is sent until you approve each step
+        in your wallet.
       </p>
 
       {!isConnected && (
@@ -500,7 +512,7 @@ export function PayFlow() {
               htmlFor="supplier"
               className="block text-sm font-semibold text-slate-800"
             >
-              Supplier wallet address
+              To
             </label>
             <input
               id="supplier"
@@ -518,7 +530,7 @@ export function PayFlow() {
                 htmlFor="amount"
                 className="block text-sm font-semibold text-slate-800"
               >
-                Amount (USD₮)
+                Amount
               </label>
               <input
                 id="amount"
@@ -526,11 +538,11 @@ export function PayFlow() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 disabled={!ready || stage !== "form" || busy}
-                className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
+                className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-lg font-semibold text-slate-800 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
               />
               {usdtBalance !== null && (
                 <p className="mt-1 text-xs text-slate-500">
-                  Your balance: {formatUnits(usdtBalance, sellDecimals)} USD₮
+                  Balance: {formatUnits(usdtBalance, sellDecimals)} USD₮
                 </p>
               )}
             </div>
@@ -539,7 +551,7 @@ export function PayFlow() {
                 htmlFor="currency"
                 className="block text-sm font-semibold text-slate-800"
               >
-                Supplier receives
+                They receive
               </label>
               <select
                 id="currency"
@@ -626,6 +638,15 @@ export function PayFlow() {
           <p className="mt-3 text-xs text-slate-500">
             This is an estimate. The firm quote locks the exact amounts.
           </p>
+          <div className="mt-4 rounded-xl bg-green-50 p-4 text-xs leading-relaxed text-green-900">
+            <p className="font-semibold">About the next step</p>
+            <p className="mt-1">
+              Your wallet will ask you to sign a message proving you control
+              this wallet. A signature cannot move your funds — it only proves
+              ownership to Textile so they give you a firm quote. You can
+              reject it safely and nothing happens.
+            </p>
+          </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
