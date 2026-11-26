@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { erc20Abi, formatUnits, isAddress, parseUnits, type Address, type Hex } from "viem";
-import { formatTokenAmount } from "@/lib/format";
+import { formatDecimalAmount, formatTokenAmount } from "@/lib/format";
 import {
   useAccount,
   usePublicClient,
@@ -268,6 +268,17 @@ export function PayFlow({
     return () => clearTimeout(timer);
   }, [supplier, amount, currency, ready, sellDecimals, stage, address, preview, previewNonce]);
 
+  // MAX: fill the amount with the full USD₮ balance. Clean, parseable
+  // number — at most 4 decimal places, no thousands separators — so the
+  // live estimate picks it up exactly like a typed value.
+  function fillMax() {
+    if (usdtBalance === null || usdtBalance === 0n) return;
+    const value = formatDecimalAmount(
+      formatUnits(usdtBalance, sellDecimals),
+    ).replace(/,/g, "");
+    setAmount(value);
+  }
+
   async function getFirmQuote() {
     if (!address) return;
     // Auto-generate an invoice reference if the user left it blank.
@@ -311,6 +322,12 @@ export function PayFlow({
       if (rfq.status === "no_quote" || !rfq.quote || !rfq.transactions) {
         throw new Error(
           `No firm quote right now${rfq.reason ? `: ${rfq.reason}` : ""}. Try a smaller amount or try again shortly.`,
+        );
+      }
+      // Fee guard: never proceed on a quote the wallet can't cover.
+      if (usdtBalance !== null && BigInt(rfq.quote.takerPays) > usdtBalance) {
+        throw new Error(
+          "That amount plus the fee is more than your balance — lower the amount slightly.",
         );
       }
       setFirm(rfq);
@@ -485,6 +502,16 @@ export function PayFlow({
   }
 
   const quoteExpired = stage === "confirm" && secondsLeft !== null && secondsLeft <= 0;
+
+  // Fee guard for the live estimate: the preview's takerPays is the exact
+  // amount leaving the wallet and can sit slightly above the typed amount
+  // because of the fee. If it exceeds the balance, the user is warned and
+  // cannot proceed to a firm quote on that amount.
+  const takerPaysExceedsBalance =
+    stage === "preview" &&
+    preview !== null &&
+    usdtBalance !== null &&
+    BigInt(preview.takerPays) > usdtBalance;
   const steps: ExecStep[] = ["approving", "swapping", "confirming", "paying", "done"];
   const execIndex = steps.indexOf(execStep);
 
@@ -568,15 +595,27 @@ export function PayFlow({
               >
                 Amount
               </label>
-              <input
-                id="amount"
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                disabled={!ready || busy}
-                className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-lg font-semibold text-slate-800 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
-              />
+              <div className="mt-1 flex gap-2">
+                <input
+                  id="amount"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                  disabled={!ready || busy}
+                  className="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-3 text-lg font-semibold text-slate-800 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
+                />
+                <button
+                  type="button"
+                  onClick={fillMax}
+                  disabled={
+                    !ready || busy || usdtBalance === null || usdtBalance === 0n
+                  }
+                  className="shrink-0 rounded-xl border border-green-600 px-4 py-3 text-sm font-bold text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  MAX
+                </button>
+              </div>
               {usdtBalance !== null && (
                 <p className="mt-1 text-xs text-slate-500">
                   Balance: {formatTokenAmount(usdtBalance, sellDecimals)} USD₮
@@ -668,6 +707,12 @@ export function PayFlow({
           <p className="mt-3 text-xs text-slate-500">
             This is an estimate. The firm quote locks the exact amounts.
           </p>
+          {takerPaysExceedsBalance && (
+            <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-medium text-amber-800">
+              That amount plus the fee is more than your balance — lower the
+              amount slightly.
+            </p>
+          )}
           <div className="mt-4 rounded-xl bg-green-50 p-4 text-xs leading-relaxed text-green-900">
             <p className="font-semibold">About the next step</p>
             <p className="mt-1">
@@ -681,7 +726,7 @@ export function PayFlow({
             <button
               type="button"
               onClick={() => void getFirmQuote()}
-              disabled={busy}
+              disabled={busy || takerPaysExceedsBalance}
               className="rounded-full bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:opacity-50"
             >
               {busy ? "Requesting firm quote… (up to ~70s)" : "Get firm quote"}
