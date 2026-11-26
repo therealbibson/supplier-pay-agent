@@ -15,7 +15,7 @@ export function RecentPayments({ refreshTick = 0 }: { refreshTick?: number }) {
   return (
     <section>
       <div className="flex items-baseline justify-between gap-4">
-        <h2 className="text-lg font-bold text-slate-800">Recent payments</h2>
+        <h2 className="text-lg font-bold text-slate-800">Recent activity</h2>
         <Link
           href="/history"
           className="text-xs font-semibold text-green-700 hover:underline"

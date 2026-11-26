@@ -3,6 +3,7 @@
 import { useAccount } from "wagmi";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { BottomNav } from "@/components/BottomNav";
 import { HistoryList } from "@/components/HistoryList";
 
 /**
@@ -16,7 +17,7 @@ export default function HistoryPage() {
     <div className="min-h-screen bg-white text-slate-800">
       <Header />
 
-      <main className="mx-auto max-w-lg px-4 pb-16 pt-6">
+      <main className="mx-auto max-w-lg px-4 pb-10 pt-6">
         <h1 className="text-2xl font-extrabold tracking-tight">History</h1>
         <p className="mt-1 text-sm text-slate-500">
           Live from Celo — every transaction for your connected wallet,
@@ -28,6 +29,7 @@ export default function HistoryPage() {
       </main>
 
       <Footer />
+      <BottomNav />
     </div>
   );
 }

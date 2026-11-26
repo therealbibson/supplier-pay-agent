@@ -80,8 +80,8 @@ function EyeIcon({ off }: { off?: boolean }) {
  * Wallet balance card — the top of a normal wallet home screen.
  *
  * - Coin selector (dropdown): USD₮, cNGN, IDRX, wBRL, wARS, wMXN, wCOP,
- *   CELO. The selected coin's balance is the large number; the rest show
- *   small beneath. Every balance is read on-chain from the connected
+ *   CELO. Only the selected coin's balance is shown, large — no other
+ *   coin's balance is listed on the card.
  *   wallet (decimals read on-chain too, never guessed); CELO is the
  *   native balance (18 decimals).
  * - Eye toggle: hides every amount on the card behind "••••••".
@@ -196,21 +196,12 @@ export function WalletBalances() {
     return `${formatTokenAmount(value, dec)} ${symbol}`;
   }
 
-  function formatSmall(
-    value: bigint | null | undefined,
-    dec: number | undefined,
-  ): string {
-    if (hidden) return "••••••";
-    if (value === null || value === undefined || dec === undefined) return "—";
-    return formatTokenAmount(value, dec);
-  }
-
   return (
-    <section className="rounded-2xl bg-green-600 p-6 text-white shadow-sm">
+    <section className="rounded-3xl bg-green-600 p-6 text-white shadow-md">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-green-100">
-            Your wallet
+            Total
           </p>
           {isConnected && address && (
             <p className="mt-1 font-mono text-xs text-green-100">
@@ -257,20 +248,6 @@ export function WalletBalances() {
           <p className="mt-3 text-4xl font-extrabold tracking-tight">
             {formatAmount(selectedBalance, selectedDecimals, selected.symbol)}
           </p>
-
-          <div className="mt-4 space-y-1 border-t border-green-500 pt-4 text-sm">
-            {COINS.filter((c) => c.key !== coin).map((c) => (
-              <p key={c.key} className="flex justify-between gap-4">
-                <span className="text-green-100">
-                  {c.symbol}
-                  {c.key === "CELO" ? " · for gas" : ""}
-                </span>
-                <span className="font-semibold">
-                  {formatSmall(balances[c.key], decimals[c.key])}
-                </span>
-              </p>
-            ))}
-          </div>
 
           {!hidden && celoBalance !== null && celoBalance === 0n && (
             <p className="mt-3 rounded-xl bg-green-700 px-3 py-2 text-xs text-green-50">

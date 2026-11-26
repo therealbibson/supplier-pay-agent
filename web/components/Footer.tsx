@@ -3,7 +3,7 @@ import { GITHUB_REPO } from "@/lib/config";
 
 export function Footer() {
   return (
-    <footer className="border-t border-slate-200 py-8 text-sm text-slate-500">
+    <footer className="border-t border-slate-200 pb-28 pt-8 text-sm text-slate-500">
       <div className="mx-auto max-w-lg px-4">
         <div className="flex flex-wrap gap-x-5 gap-y-2">
           <Link

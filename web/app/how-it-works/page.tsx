@@ -1,5 +1,6 @@
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { BottomNav } from "@/components/BottomNav";
 import {
   AGENT_WALLET,
   ATTRIBUTION_TAG,
@@ -18,7 +19,7 @@ export default function HowItWorks() {
     <div className="min-h-screen bg-white text-slate-800">
       <Header />
 
-      <main className="mx-auto max-w-lg px-4 pb-16 pt-10">
+      <main className="mx-auto max-w-lg px-4 pb-10 pt-10">
         <p className="text-xs font-semibold uppercase tracking-widest text-green-600">
           Celo · Agents Open for Business — Stablecoin Corridors
         </p>
@@ -32,7 +33,7 @@ export default function HowItWorks() {
         </p>
 
         <ol className="mt-8 space-y-4">
-          <li className="rounded-2xl border border-slate-200 bg-white p-6">
+          <li className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-green-600 text-sm font-extrabold text-white">
               1
             </span>
@@ -43,7 +44,7 @@ export default function HowItWorks() {
               and the fee, before anything moves.
             </p>
           </li>
-          <li className="rounded-2xl border border-slate-200 bg-white p-6">
+          <li className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-green-600 text-sm font-extrabold text-white">
               2
             </span>
@@ -54,7 +55,7 @@ export default function HowItWorks() {
               without your say-so.
             </p>
           </li>
-          <li className="rounded-2xl border border-slate-200 bg-white p-6">
+          <li className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-green-600 text-sm font-extrabold text-white">
               3
             </span>
@@ -75,7 +76,7 @@ export default function HowItWorks() {
         <p className="mt-2 text-slate-500">
           Registered on Celo mainnet. Verifiable on Celoscan.
         </p>
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white px-6 py-2">
+        <div className="mt-6 rounded-3xl border border-slate-200 bg-white px-6 py-2 shadow-sm">
           <dl>
             <div className="grid gap-1 border-b border-slate-200 py-4 sm:grid-cols-[180px_1fr] sm:gap-4 sm:items-baseline">
               <dt className="text-sm font-semibold text-slate-500">
@@ -143,7 +144,7 @@ export default function HowItWorks() {
         <h2 className="mt-12 text-2xl font-extrabold tracking-tight">
           Is PayBridge safe?
         </h2>
-        <div className="mt-6 space-y-4 text-sm leading-relaxed text-slate-600">
+        <div className="mt-6 space-y-4 rounded-3xl border border-slate-200 bg-white p-6 text-sm leading-relaxed text-slate-600 shadow-sm">
           <p>
             <strong className="text-slate-800">
               Your keys never leave your wallet.
@@ -221,6 +222,7 @@ export default function HowItWorks() {
       </main>
 
       <Footer />
+      <BottomNav />
     </div>
   );
 }
