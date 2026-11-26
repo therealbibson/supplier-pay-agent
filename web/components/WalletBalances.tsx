@@ -39,7 +39,14 @@ const COIN_KEY = "paybridge.balanceCoin";
  *   balance and the selector row are separate tap targets.
  * - Only the selected coin's balance is shown on the card — no other
  *   coin's balance is listed.
- * - Amounts are shown with 2–4 decimal places (see lib/format.ts).
+ * - Amounts are shown with 2–4 decimal places (see lib/format.ts),
+ *   sign only (e.g. "$10.00", "₦72,214.83") — no trailing currency
+ *   code; the selector row shows which coin is selected.
+ * - Type: Inter, loaded self-hosted via next/font/google in
+ *   app/layout.tsx (CSS variable --font-inter, wired to --font-sans in
+ *   globals.css). The card applies it explicitly via font-sans so the
+ *   card's type stays Inter even if the app default ever changes;
+ *   amounts use tabular figures so digits line up.
  * - Gated on connection: before the user connects, the card shows a
  *   neutral state — "Total" label, a muted "—" where the balance goes,
  *   and the coin selector row at the bottom — with no instruction text
@@ -148,14 +155,16 @@ export function WalletBalances() {
   ): string {
     if (hidden) return `•••••• ${symbol}`;
     if (value === null || value === undefined || dec === undefined)
-      return `— ${symbol}`;
-    // Currency symbol before the amount, e.g. "$10.00 USD₮", "₦72,214.83 cNGN".
-    return `${selected.prefix}${formatTokenAmount(value, dec)} ${symbol}`;
+      return "—";
+    // Currency sign before the amount only, e.g. "$10.00", "₦72,214.83".
+    // No trailing currency code — the selector row at the bottom of the
+    // card already shows which coin is selected.
+    return `${selected.prefix}${formatTokenAmount(value, dec)}`;
   }
 
   return (
     <>
-      <section className="rounded-3xl bg-green-600 p-6 text-white shadow-md">
+      <section className="rounded-3xl bg-green-600 p-6 font-sans text-white shadow-md">
         <div className="flex items-start justify-between gap-3">
           <p className="text-xs font-semibold uppercase tracking-widest text-green-100">
             Total
@@ -184,7 +193,7 @@ export function WalletBalances() {
                   : `Balance ${formatAmount(selectedBalance, selectedDecimals, selected.symbol)}. Tap to hide balance.`
               }
               title={hidden ? "Tap to show balance" : "Tap to hide balance"}
-              className="mt-3 block cursor-pointer rounded-lg text-left text-4xl font-extrabold tracking-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+              className="mt-3 block cursor-pointer rounded-lg text-left text-4xl font-extrabold tracking-tight tabular-nums focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
             >
               {formatAmount(selectedBalance, selectedDecimals, selected.symbol)}
             </button>
@@ -201,7 +210,7 @@ export function WalletBalances() {
           </>
         ) : (
           /* Neutral pre-connect state: a muted dash, no instruction text. */
-          <p className="mt-3 text-4xl font-extrabold tracking-tight text-green-200">
+          <p className="mt-3 text-4xl font-extrabold tracking-tight tabular-nums text-green-200">
             —
           </p>
         )}
@@ -252,6 +261,7 @@ export function WalletBalances() {
         balances={balances}
         decimals={decimals}
         hidden={hidden}
+        className="font-sans"
       />
     </>
   );

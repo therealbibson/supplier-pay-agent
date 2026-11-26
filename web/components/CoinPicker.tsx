@@ -118,6 +118,9 @@ export interface CoinPickerProps {
   /** Mask every amount as •••••• (hide-balances mode). */
   hidden?: boolean;
   title?: string;
+  /** Extra classes for the sheet (e.g. the caller's font, so the picker
+      matches the surface that opened it). */
+  className?: string;
 }
 
 /**
@@ -136,6 +139,7 @@ export function CoinPicker({
   decimals,
   hidden = false,
   title = "Select currency",
+  className,
 }: CoinPickerProps) {
   // Escape closes the picker; lock body scroll while it is open.
   useEffect(() => {
@@ -167,7 +171,9 @@ export function CoinPicker({
         onClick={onClose}
         className="absolute inset-0 cursor-default bg-black/50"
       />
-      <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-lg animate-slide-up rounded-t-3xl bg-white p-4 pb-6 shadow-2xl">
+      <div
+        className={`absolute inset-x-0 bottom-0 mx-auto w-full max-w-lg animate-slide-up rounded-t-3xl bg-white p-4 pb-6 shadow-2xl ${className ?? ""}`}
+      >
         <div className="mx-auto h-1.5 w-10 rounded-full bg-slate-200" />
         <div className="mt-3 flex items-center justify-between px-1">
           <h2 className="text-base font-bold text-slate-800">{title}</h2>
@@ -204,7 +210,7 @@ export function CoinPicker({
                       {c.name}
                     </span>
                   </span>
-                  <span className="text-sm font-semibold text-slate-700">
+                  <span className="text-sm font-semibold tabular-nums text-slate-700">
                     {hidden
                       ? "••••••"
                       : bal === null || bal === undefined || dec === undefined
