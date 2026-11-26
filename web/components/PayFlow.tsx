@@ -725,92 +725,94 @@ export function PayFlow({
             />
           </div>
 
-          {/* Single column at every width: at desktop the two-column
-              split left the amount input crushed to ~33px once the send
-              currency picker and MAX sat beside it. Full width gives the
-              input room and keeps the picker + MAX uncrowded. */}
-          <div className="grid gap-4">
-            <div>
-              <label
-                htmlFor="amount"
-                className="block text-sm font-semibold text-slate-800"
-              >
-                Amount
-              </label>
-              <div className="mt-1 flex gap-2">
-                <input
-                  id="amount"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => {
-                    // Any manual edit means the amount no longer came from
-                    // MAX, so the fee is no longer deducted automatically.
-                    fromMaxRef.current = false;
-                    setAmount(e.target.value);
-                  }}
-                  placeholder="0.00"
-                  disabled={!ready || busy}
-                  className="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-3 text-lg font-semibold text-slate-800 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
-                />
-                {/* Send currency — same MiniPay picker as the balance
-                    card: logo + symbol, opens the bottom sheet. */}
-                <button
-                  type="button"
-                  onClick={() => setSellPickerOpen(true)}
-                  disabled={!ready || busy}
-                  aria-haspopup="dialog"
-                  aria-expanded={sellPickerOpen}
-                  aria-label={`Send currency: ${sellCoin.symbol}. Tap to change.`}
-                  className="flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-40"
-                >
-                  <CoinIcon coin={sellCoin} size={24} />
-                  {sellCoin.symbol}
-                </button>
-                <button
-                  type="button"
-                  onClick={fillMax}
-                  disabled={
-                    !ready || busy || sellBalance === null || sellBalance === 0n
-                  }
-                  className="shrink-0 rounded-xl border border-green-600 px-4 py-3 text-sm font-bold text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  MAX
-                </button>
-              </div>
-              {sellBalance !== null && allDecimals[sellCurrency] !== undefined && (
-                <p className="mt-1 text-xs text-slate-500">
-                  Balance: {formatTokenAmount(sellBalance, sellDecimals)}{" "}
-                  {sellCoin.symbol}
-                </p>
-              )}
-            </div>
-            <div>
-              <span className="block text-sm font-semibold text-slate-800">
-                They receive
-              </span>
-              {/* Same MiniPay picker as the send side — the list always
-                  excludes the selected send currency. */}
+          {/* Plain block children, NOT a grid wrapper: a single implicit
+              `auto` grid column sizes to its content's min-content (the
+              amount input's intrinsic size=20 width), so the track ran
+              ~43px past the card's right edge and took MAX and "They
+              receive" with it. Block boxes always fill the card width,
+              so the amount row and receive button can no longer
+              overflow. Spacing is unchanged: the form's space-y-4 gives
+              the same 16px between these blocks as the grid's gap-4 did. */}
+          <div>
+            <label
+              htmlFor="amount"
+              className="block text-sm font-semibold text-slate-800"
+            >
+              Amount
+            </label>
+            <div className="mt-1 flex gap-2">
+              <input
+                id="amount"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => {
+                  // Any manual edit means the amount no longer came from
+                  // MAX, so the fee is no longer deducted automatically.
+                  fromMaxRef.current = false;
+                  setAmount(e.target.value);
+                }}
+                placeholder="0.00"
+                disabled={!ready || busy}
+                className="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-3 text-lg font-semibold text-slate-800 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
+              />
+              {/* Send currency — same MiniPay picker as the balance
+                  card: logo + symbol, opens the bottom sheet. */}
               <button
                 type="button"
-                onClick={() => setReceivePickerOpen(true)}
+                onClick={() => setSellPickerOpen(true)}
                 disabled={!ready || busy}
                 aria-haspopup="dialog"
-                aria-expanded={receivePickerOpen}
-                aria-label={`Receive currency: ${receiveCoin.symbol}. Tap to change.`}
-                className="mt-1 flex w-full min-w-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:bg-slate-50 disabled:opacity-60"
+                aria-expanded={sellPickerOpen}
+                aria-label={`Send currency: ${sellCoin.symbol}. Tap to change.`}
+                className="flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-40"
               >
-                <CoinIcon coin={receiveCoin} size={24} />
-                <span className="shrink-0">{receiveCoin.symbol}</span>
-                <span className="min-w-0 flex-1 truncate font-normal text-slate-500">
-                  — {receiveCoin.name}
-                </span>
+                <CoinIcon coin={sellCoin} size={24} />
+                {sellCoin.symbol}
               </button>
-              {celoBalance !== null && celoBalance === 0n && (
-                <p className="mt-1 text-xs text-amber-700">
-                  Your CELO balance is 0 — you need a little CELO for gas.
-                </p>
-              )}
+              <button
+                type="button"
+                onClick={fillMax}
+                disabled={
+                  !ready || busy || sellBalance === null || sellBalance === 0n
+                }
+                className="shrink-0 rounded-xl border border-green-600 px-4 py-3 text-sm font-bold text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                MAX
+              </button>
             </div>
+            {sellBalance !== null && allDecimals[sellCurrency] !== undefined && (
+              <p className="mt-1 text-xs text-slate-500">
+                Balance: {formatTokenAmount(sellBalance, sellDecimals)}{" "}
+                {sellCoin.symbol}
+              </p>
+            )}
+          </div>
+          <div>
+            <span className="block text-sm font-semibold text-slate-800">
+              They receive
+            </span>
+            {/* Same MiniPay picker as the send side — the list always
+                excludes the selected send currency. */}
+            <button
+              type="button"
+              onClick={() => setReceivePickerOpen(true)}
+              disabled={!ready || busy}
+              aria-haspopup="dialog"
+              aria-expanded={receivePickerOpen}
+              aria-label={`Receive currency: ${receiveCoin.symbol}. Tap to change.`}
+              className="mt-1 flex w-full min-w-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:bg-slate-50 disabled:opacity-60"
+            >
+              <CoinIcon coin={receiveCoin} size={24} />
+              <span className="shrink-0">{receiveCoin.symbol}</span>
+              <span className="min-w-0 flex-1 truncate font-normal text-slate-500">
+                — {receiveCoin.name}
+              </span>
+            </button>
+            {celoBalance !== null && celoBalance === 0n && (
+              <p className="mt-1 text-xs text-amber-700">
+                Your CELO balance is 0 — you need a little CELO for gas.
+              </p>
+            )}
           </div>
 
           <div>
