@@ -153,7 +153,7 @@ export function WalletBalances() {
     dec: number | undefined,
     symbol: string,
   ): string {
-    if (hidden) return `•••••• ${symbol}`;
+    if (hidden) return `${selected.prefix} ••••••`;
     if (value === null || value === undefined || dec === undefined)
       return "—";
     // Currency sign before the amount only, e.g. "$10.00", "₦72,214.83".
