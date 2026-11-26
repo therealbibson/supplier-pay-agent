@@ -1,8 +1,8 @@
 # PayBridge web app
 
 A real, usable PayBridge: connect your wallet, get a Textile FX quote, swap
-USD₮ for a local stablecoin and pay a supplier — all on Celo mainnet, all
-from the browser. This replaces the old static landing page.
+a stablecoin for the supplier's currency and pay a supplier — all on Celo
+mainnet, all from the browser. This replaces the old static landing page.
 
 ## Run it locally
 
@@ -23,9 +23,12 @@ npm start
 
 1. **Connect wallet** — injected wallet (MetaMask etc.) via wagmi, Celo
    mainnet only (chainId 42220). Wrong network prompts a switch.
-2. **Pay form** — supplier wallet address, amount in USD₮, target currency
-   (cNGN default; also IDRX, wBRL, wARS, wMXN, wCOP), optional invoice
-   reference.
+2. **Pay form** — supplier wallet address, amount in a chosen send
+   currency (USD₮ default; also cNGN, IDRX, wBRL, wARS, wMXN, wCOP),
+   target currency (cNGN default; also USD₮ when sending a local, plus
+   IDRX, wBRL, wARS, wMXN, wCOP), optional invoice reference. The send
+   currency is picked from the same MiniPay-style bottom sheet as the
+   balance card. CELO cannot be sent — Textile has no CELO corridor.
 3. **Estimate** — free Textile preview via `POST /api/rfq/preview`.
 4. **Firm quote** — `POST /api/rfq/request` (75 s timeout; the route sets
    `maxDuration = 75`). Keyless: the server sends unsigned first and, if

@@ -5,42 +5,13 @@ import { useAccount, usePublicClient } from "wagmi";
 import { CELOSCAN, TOKENS } from "@/lib/config";
 import { tokenBalance, tokenDecimals } from "@/lib/execute";
 import { formatTokenAmount } from "@/lib/format";
+import { COINS, CoinIcon, CoinPicker, type CoinDef, type CoinKey } from "./CoinPicker";
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-type BalanceCoin =
-  | "USD_T"
-  | "cNGN"
-  | "IDRX"
-  | "wBRL"
-  | "wARS"
-  | "wMXN"
-  | "wCOP"
-  | "CELO";
-
-interface CoinDef {
-  key: BalanceCoin;
-  symbol: string;
-  /** Full name shown in the picker. */
-  name: string;
-  /** Real logo image, served from /public/coins. */
-  logo: string;
-  /** ERC-20 address; absent for native CELO. */
-  token?: keyof typeof TOKENS;
-}
-
-const COINS: CoinDef[] = [
-  { key: "USD_T", symbol: "USD₮", name: "Tether USD", logo: "/coins/usdt.png", token: "USD_T" },
-  { key: "cNGN", symbol: "cNGN", name: "Nigerian Naira", logo: "/coins/cngn.png", token: "cNGN" },
-  { key: "IDRX", symbol: "IDRX", name: "Indonesian Rupiah", logo: "/coins/idrx.png", token: "IDRX" },
-  { key: "wBRL", symbol: "wBRL", name: "Brazilian Real", logo: "/coins/wbrl.png", token: "wBRL" },
-  { key: "wARS", symbol: "wARS", name: "Argentine Peso", logo: "/coins/wars.png", token: "wARS" },
-  { key: "wMXN", symbol: "wMXN", name: "Mexican Peso", logo: "/coins/wmxn.png", token: "wMXN" },
-  { key: "wCOP", symbol: "wCOP", name: "Colombian Peso", logo: "/coins/wcop.png", token: "wCOP" },
-  { key: "CELO", symbol: "CELO", name: "Celo", logo: "/coins/celo.png" },
-];
+type BalanceCoin = CoinKey;
 
 /**
  * Display-only preferences, stored in localStorage so they stick across
@@ -49,61 +20,6 @@ const COINS: CoinDef[] = [
  */
 const HIDE_KEY = "paybridge.hideBalances";
 const COIN_KEY = "paybridge.balanceCoin";
-
-function CheckIcon() {
-  return (
-    <svg
-      width={18}
-      height={18}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg
-      width={18}
-      height={18}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <path d="M18 6 6 18" />
-      <path d="m6 6 12 12" />
-    </svg>
-  );
-}
-
-/** The coin's real logo image, clipped to a circle. */
-function CoinIcon({ coin, size = 36 }: { coin: CoinDef; size?: number }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="block shrink-0 overflow-hidden rounded-full bg-white"
-      style={{ width: size, height: size }}
-    >
-      <img
-        src={coin.logo}
-        alt=""
-        width={size}
-        height={size}
-        className="h-full w-full object-cover"
-      />
-    </span>
-  );
-}
 
 /**
  * Wallet balance card — the top of a normal wallet home screen, in the
@@ -170,21 +86,6 @@ export function WalletBalances() {
     }
   }
 
-  // Escape closes the picker; lock body scroll while it is open.
-  useEffect(() => {
-    if (!pickerOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPickerOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [pickerOpen]);
-
   // Balances + decimals, read on-chain from the connected wallet.
   // Gated on address: nothing is fetched before the user connects.
   useEffect(() => {
@@ -247,7 +148,8 @@ export function WalletBalances() {
     if (hidden) return `•••••• ${symbol}`;
     if (value === null || value === undefined || dec === undefined)
       return `— ${symbol}`;
-    return `${formatTokenAmount(value, dec)} ${symbol}`;
+    // Currency symbol before the amount, e.g. "$10.00 USD₮", "₦72,214.83 cNGN".
+    return `${selected.prefix}${formatTokenAmount(value, dec)} ${symbol}`;
   }
 
   return (
@@ -323,83 +225,20 @@ export function WalletBalances() {
         </button>
       </section>
 
-      {/* MiniPay-style currency picker: white bottom sheet with rounded
-          top corners, one row per coin with its real logo. */}
-      {pickerOpen && (
-        <div
-          className="fixed inset-0 z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Select currency"
-        >
-          <button
-            type="button"
-            aria-label="Close currency picker"
-            onClick={() => setPickerOpen(false)}
-            className="absolute inset-0 cursor-default bg-black/50"
-          />
-          <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-lg rounded-t-3xl bg-white p-4 pb-6 shadow-2xl">
-            <div className="mx-auto h-1.5 w-10 rounded-full bg-slate-200" />
-            <div className="mt-3 flex items-center justify-between px-1">
-              <h2 className="text-base font-bold text-slate-800">
-                Select currency
-              </h2>
-              <button
-                type="button"
-                onClick={() => setPickerOpen(false)}
-                aria-label="Close"
-                className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100"
-              >
-                <CloseIcon />
-              </button>
-            </div>
-            <ul className="mt-2 divide-y divide-slate-100">
-              {COINS.map((c) => {
-                const isSelected = c.key === coin;
-                const bal = balances[c.key] ?? null;
-                const dec = decimals[c.key];
-                return (
-                  <li key={c.key}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        selectCoin(c.key);
-                        setPickerOpen(false);
-                      }}
-                      aria-current={isSelected}
-                      className={`flex w-full items-center gap-3 rounded-2xl px-2 py-3 text-left transition ${
-                        isSelected ? "bg-green-50" : "hover:bg-slate-50"
-                      }`}
-                    >
-                      <CoinIcon coin={c} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-semibold text-slate-800">
-                          {c.symbol}
-                        </span>
-                        <span className="block truncate text-xs text-slate-500">
-                          {c.name}
-                        </span>
-                      </span>
-                      <span className="text-sm font-semibold text-slate-700">
-                        {hidden
-                          ? "••••••"
-                          : bal === null || bal === undefined || dec === undefined
-                            ? "—"
-                            : formatTokenAmount(bal, dec)}
-                      </span>
-                      {isSelected && (
-                        <span className="text-green-600">
-                          <CheckIcon />
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </div>
-      )}
+      {/* MiniPay-style currency picker (shared with the Send screen). */}
+      <CoinPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        coins={COINS}
+        selectedKey={coin}
+        onSelect={(c) => {
+          selectCoin(c);
+          setPickerOpen(false);
+        }}
+        balances={balances}
+        decimals={decimals}
+        hidden={hidden}
+      />
     </>
   );
 }

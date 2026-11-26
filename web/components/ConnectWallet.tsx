@@ -21,7 +21,7 @@ export function ConnectWallet() {
 
   if (!isConnected || !address) {
     return (
-      <div className="flex flex-col items-end gap-1">
+      <div className="flex flex-col items-end">
         <button
           type="button"
           onClick={() => connect({ connector: injected() })}
@@ -30,10 +30,6 @@ export function ConnectWallet() {
         >
           {isPending ? "Connecting…" : "Connect wallet"}
         </button>
-        <p className="max-w-[210px] text-right text-[11px] leading-tight text-slate-500">
-          Connecting only shares your public address. No signature, no
-          approval, no access to your funds.
-        </p>
       </div>
     );
   }

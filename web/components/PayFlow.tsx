@@ -14,11 +14,15 @@ import {
   ATTRIBUTION_TAG,
   CELOSCAN,
   CHAIN,
-  LOCAL_STABLECOIN_LABELS,
-  LOCAL_STABLECOINS,
   TOKENS,
-  type LocalStablecoin,
 } from "@/lib/config";
+import {
+  CoinIcon,
+  CoinPicker,
+  SENDABLE_COINS,
+  type CoinDef,
+  type CoinKey,
+} from "@/components/CoinPicker";
 import {
   approveIfNeeded,
   executeSwap,
@@ -77,13 +81,31 @@ function TxLink({ hash, label }: { hash: Hex; label: string }) {
   );
 }
 
-const STEP_LABELS: Record<ExecStep, string> = {
-  approving: "Approve USD₮ spend",
-  swapping: "Swap USD₮ for local stablecoin",
-  confirming: "Confirm the swap filled",
-  paying: "Pay the supplier",
-  done: "Done",
-};
+/**
+ * Any of the 7 stablecoins can be the send currency and any (except the
+ * send one) can be the receive currency. CELO is not in this set:
+ * Textile has no CELO corridor on Celo mainnet (its preview answers
+ * `corridor_unavailable`), so it cannot be sold through a quote.
+ * USD₮ is a valid receive currency when the send is a local coin —
+ * cNGN→USD₮ quotes, but local→local pairs have no corridor at all.
+ */
+type FlowCurrency = keyof typeof TOKENS;
+
+/** Persisted send-currency choice (display preference only). */
+const SEND_CURRENCY_KEY = "paybridge.sendCurrency";
+
+function buildStepLabels(
+  sellSymbol: string,
+  buySymbol: string,
+): Record<ExecStep, string> {
+  return {
+    approving: `Approve ${sellSymbol} spend`,
+    swapping: `Swap ${sellSymbol} for ${buySymbol}`,
+    confirming: "Confirm the swap filled",
+    paying: "Pay the supplier",
+    done: "Done",
+  };
+}
 
 export function PayFlow({
   onPaymentDone,
@@ -106,7 +128,14 @@ export function PayFlow({
 
   const [supplier, setSupplier] = useState("");
   const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState<LocalStablecoin>("cNGN");
+  // The send currency (default USD₮) and the receive currency. The
+  // receive list always excludes the send coin; a local send can only
+  // reach USD₮ (local→local corridors don't exist on Textile), so
+  // switching the send side to a local resets receive to USD₮.
+  const [sellCurrency, setSellCurrency] = useState<FlowCurrency>("USD_T");
+  const [currency, setCurrency] = useState<FlowCurrency>("cNGN");
+  const [sellPickerOpen, setSellPickerOpen] = useState(false);
+  const [receivePickerOpen, setReceivePickerOpen] = useState(false);
   const [invoice, setInvoice] = useState("");
   const [stage, setStage] = useState<Stage>("form");
   const [execStep, setExecStep] = useState<ExecStep>("approving");
@@ -114,9 +143,15 @@ export function PayFlow({
   const [fillPending, setFillPending] = useState(false);
   const [preview, setPreview] = useState<PreviewQuote | null>(null);
   const [firm, setFirm] = useState<RfqResponse | null>(null);
-  const [sellDecimals, setSellDecimals] = useState(6);
-  const [buyDecimals, setBuyDecimals] = useState(6);
-  const [usdtBalance, setUsdtBalance] = useState<bigint | null>(null);
+  // Decimals and balances for every sendable stablecoin, read on-chain
+  // (never guessed) once the wallet connects. The picker rows and the
+  // balance under the amount input read from these maps.
+  const [allDecimals, setAllDecimals] = useState<
+    Partial<Record<FlowCurrency, number>>
+  >({});
+  const [allBalances, setAllBalances] = useState<
+    Partial<Record<FlowCurrency, bigint | null>>
+  >({});
   const [celoBalance, setCeloBalance] = useState<bigint | null>(null);
   const [txs, setTxs] = useState<TxHashes>({});
   const [filledBuyAmount, setFilledBuyAmount] = useState<string | null>(null);
@@ -138,57 +173,81 @@ export function PayFlow({
   const lastPreviewKeyRef = useRef("");
   // MAX auto-adjust: tracks whether the current amount came from tapping
   // MAX, how many times it has already been shrunk to fit the fee, and a
-  // fresh copy of the USD₮ balance for the async preview handler.
+  // fresh copy of the selected send token's balance for the async preview
+  // handler.
   const fromMaxRef = useRef(false);
   const maxAdjustCountRef = useRef(0);
-  const usdtBalanceRef = useRef<bigint | null>(null);
+  const sellBalanceRef = useRef<bigint | null>(null);
 
   const onCelo = isConnected && chainId === CHAIN.id;
   const ready = onCelo && !!address && !!publicClient && !!walletClient;
 
-  // Token decimals + balances (decimals are read on-chain, never guessed).
+  // Selected coins and their on-chain data, derived from the maps.
+  const sellCoin: CoinDef =
+    SENDABLE_COINS.find((c) => c.key === sellCurrency) ?? SENDABLE_COINS[0];
+  const receiveCoin: CoinDef =
+    SENDABLE_COINS.find((c) => c.key === currency) ?? SENDABLE_COINS[1];
+  const receiveCoins = SENDABLE_COINS.filter((c) => c.key !== sellCurrency);
+  // 6 is only a display fallback before the on-chain read lands; the
+  // preview never quotes until the real decimals are known (see below).
+  const sellDecimals = allDecimals[sellCurrency] ?? 6;
+  const buyDecimals = allDecimals[currency] ?? 6;
+  const sellBalance = allBalances[sellCurrency] ?? null;
+
+  // Load the persisted send currency on the client.
+  useEffect(() => {
+    try {
+      const c = window.localStorage.getItem(SEND_CURRENCY_KEY);
+      if (
+        c &&
+        (Object.keys(TOKENS) as FlowCurrency[]).includes(c as FlowCurrency)
+      ) {
+        setSellCurrency(c as FlowCurrency);
+      }
+    } catch {
+      // Storage unavailable — the USD₮ default stands.
+    }
+  }, []);
+
+  // Token decimals + balances for every sendable stablecoin, plus the
+  // native CELO balance for the gas warning. Decimals are read on-chain,
+  // never guessed (IDRX, for example, is 2 decimals, not 6).
   // Gated on address: no chain RPC call happens before the user connects
   // their wallet — the form is disabled until then anyway.
   useEffect(() => {
-    if (!publicClient || !address) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const [sd, bd] = await Promise.all([
-          tokenDecimals(publicClient, TOKENS.USD_T),
-          tokenDecimals(publicClient, TOKENS[currency]),
-        ]);
-        if (!cancelled) {
-          setSellDecimals(sd);
-          setBuyDecimals(bd);
-        }
-      } catch {
-        // Keep the known defaults (USD₮ 6, cNGN 6); the quote still carries
-        // the authoritative amounts.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [publicClient, currency, address]);
-
-  useEffect(() => {
     if (!publicClient || !address) {
-      setUsdtBalance(null);
+      setAllDecimals({});
+      setAllBalances({});
       setCeloBalance(null);
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        const [u, c] = await Promise.all([
-          tokenBalance(publicClient, TOKENS.USD_T, address),
-          publicClient.getBalance({ address }),
+        const keys = SENDABLE_COINS.map((c) => c.key as FlowCurrency);
+        const [decList, balList, celoBal] = await Promise.all([
+          Promise.all(
+            keys.map((k) =>
+              tokenDecimals(publicClient, TOKENS[k]).catch(() => null),
+            ),
+          ),
+          Promise.all(
+            keys.map((k) =>
+              tokenBalance(publicClient, TOKENS[k], address).catch(() => null),
+            ),
+          ),
+          publicClient.getBalance({ address }).catch(() => null),
         ]);
-        if (!cancelled) {
-          setUsdtBalance(u);
-          setCeloBalance(c);
-        }
+        if (cancelled) return;
+        const d: Partial<Record<FlowCurrency, number>> = {};
+        const b: Partial<Record<FlowCurrency, bigint | null>> = {};
+        keys.forEach((k, i) => {
+          if (decList[i] !== null) d[k] = decList[i] as number;
+          b[k] = balList[i];
+        });
+        setAllDecimals(d);
+        setAllBalances(b);
+        setCeloBalance(celoBal);
       } catch {
         // Balances are a convenience display; the flow re-checks before sending.
       }
@@ -198,10 +257,10 @@ export function PayFlow({
     };
   }, [publicClient, address]);
 
-  // Keep the balance ref fresh for the async preview handler.
+  // Keep the sell-balance ref fresh for the async preview handler.
   useEffect(() => {
-    usdtBalanceRef.current = usdtBalance;
-  }, [usdtBalance]);
+    sellBalanceRef.current = sellBalance;
+  }, [sellBalance]);
 
   // Firm-quote expiry countdown.
   useEffect(() => {
@@ -250,7 +309,18 @@ export function PayFlow({
       if (stage === "preview") setStage("form");
       return;
     }
-    const key = `${supplier.toLowerCase()}|${trimmedAmount}|${currency}`;
+    // Decimals are read on-chain and arrive just after connecting; don't
+    // quote until both are known, or an amount would be parsed with the
+    // wrong scale (IDRX is 2 decimals, wFIAT tokens are 18).
+    if (
+      allDecimals[sellCurrency] === undefined ||
+      allDecimals[currency] === undefined
+    ) {
+      setPreview(null);
+      setPreviewLoading(false);
+      return;
+    }
+    const key = `${supplier.toLowerCase()}|${trimmedAmount}|${sellCurrency}|${currency}|${sellDecimals}|${buyDecimals}`;
     if (key === lastPreviewKeyRef.current && preview) return;
     setPreviewLoading(true);
     const reqId = previewReqRef.current;
@@ -260,7 +330,7 @@ export function PayFlow({
           const sellAmount = parseUnits(trimmedAmount, sellDecimals);
           const p = await previewQuote({
             chainId: CHAIN.id,
-            sellToken: TOKENS.USD_T,
+            sellToken: TOKENS[sellCurrency],
             buyToken: TOKENS[currency],
             sellAmount: sellAmount.toString(),
           });
@@ -274,11 +344,11 @@ export function PayFlow({
             return;
           }
           // MAX auto-adjust: the amount came from MAX and the fee pushes
-          // takerPays over the balance, so shrink the amount to
+          // takerPays over the send balance, so shrink the amount to
           // (balance − fee) and let the debounced preview re-run with the
           // adjusted amount. At most 2 adjustments per MAX tap — after
           // that the fee-guard warning below takes over instead.
-          const maxBalance = usdtBalanceRef.current;
+          const maxBalance = sellBalanceRef.current;
           if (
             fromMaxRef.current &&
             maxBalance !== null &&
@@ -312,22 +382,42 @@ export function PayFlow({
       })();
     }, 600);
     return () => clearTimeout(timer);
-  }, [supplier, amount, currency, ready, sellDecimals, stage, address, preview, previewNonce]);
+  }, [supplier, amount, sellCurrency, currency, ready, sellDecimals, buyDecimals, stage, address, preview, previewNonce]);
 
-  // MAX: fill the amount with the full USD₮ balance. Clean, parseable
-  // number — at most 4 decimal places, no thousands separators — so the
-  // live estimate picks it up exactly like a typed value. The fee is
-  // deducted automatically once the preview comes back (see the preview
-  // handler): if amount + fee exceeds the balance, the amount is shrunk
-  // to (balance − fee) instead of warning.
+  // MAX: fill the amount with the full balance of the selected send
+  // currency. Clean, parseable number — at most 4 decimal places, no
+  // thousands separators — so the live estimate picks it up exactly like
+  // a typed value. The fee is deducted automatically once the preview
+  // comes back (see the preview handler): if amount + fee exceeds the
+  // balance, the amount is shrunk to (balance − fee) instead of warning.
   function fillMax() {
-    if (usdtBalance === null || usdtBalance === 0n) return;
+    if (sellBalance === null || sellBalance === 0n) return;
     fromMaxRef.current = true;
     maxAdjustCountRef.current = 0;
     const value = formatDecimalAmount(
-      formatUnits(usdtBalance, sellDecimals),
+      formatUnits(sellBalance, sellDecimals),
     ).replace(/,/g, "");
     setAmount(value);
+  }
+
+  function selectSellCurrency(c: FlowCurrency) {
+    setSellCurrency(c);
+    try {
+      window.localStorage.setItem(SEND_CURRENCY_KEY, c);
+    } catch {
+      // Ignore storage failures.
+    }
+    // The receive coin must differ from the send coin. A local send can
+    // only reach USD₮ (local→local corridors don't exist on Textile),
+    // so it defaults the receive side to USD₮; a USD₮ send defaults
+    // back to cNGN.
+    if (currency === c) setCurrency(c === "USD_T" ? "cNGN" : "USD_T");
+    setSellPickerOpen(false);
+  }
+
+  function selectReceiveCurrency(c: FlowCurrency) {
+    setCurrency(c);
+    setReceivePickerOpen(false);
   }
 
   async function getFirmQuote() {
@@ -340,7 +430,7 @@ export function PayFlow({
       const sellAmount = parseUnits(amount, sellDecimals);
       const base = {
         chainId: CHAIN.id,
-        sellToken: TOKENS.USD_T,
+        sellToken: TOKENS[sellCurrency],
         buyToken: TOKENS[currency],
         sellAmount: sellAmount.toString(),
         taker: address,
@@ -376,7 +466,7 @@ export function PayFlow({
         );
       }
       // Fee guard: never proceed on a quote the wallet can't cover.
-      if (usdtBalance !== null && BigInt(rfq.quote.takerPays) > usdtBalance) {
+      if (sellBalance !== null && BigInt(rfq.quote.takerPays) > sellBalance) {
         throw new Error(
           "That amount plus the fee is more than your balance — lower the amount slightly.",
         );
@@ -455,7 +545,7 @@ export function PayFlow({
         const { resetHash, hash } = await approveIfNeeded(
           publicClient,
           tagged,
-          TOKENS.USD_T,
+          TOKENS[sellCurrency],
           address,
           sellAmount,
           address,
@@ -558,15 +648,16 @@ export function PayFlow({
 
   // Fee guard for the live estimate: the preview's takerPays is the exact
   // amount leaving the wallet and can sit slightly above the typed amount
-  // because of the fee. If it exceeds the balance, the user is warned and
-  // cannot proceed to a firm quote on that amount.
+  // because of the fee. If it exceeds the send balance, the user is warned
+  // and cannot proceed to a firm quote on that amount.
   const takerPaysExceedsBalance =
     stage === "preview" &&
     preview !== null &&
-    usdtBalance !== null &&
-    BigInt(preview.takerPays) > usdtBalance;
+    sellBalance !== null &&
+    BigInt(preview.takerPays) > sellBalance;
   const steps: ExecStep[] = ["approving", "swapping", "confirming", "paying", "done"];
   const execIndex = steps.indexOf(execStep);
+  const stepLabels = buildStepLabels(sellCoin.symbol, receiveCoin.symbol);
 
   const rate =
     preview || firm?.quote
@@ -650,43 +741,59 @@ export function PayFlow({
                   disabled={!ready || busy}
                   className="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-3 text-lg font-semibold text-slate-800 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
                 />
+                {/* Send currency — same MiniPay picker as the balance
+                    card: logo + symbol, opens the bottom sheet. */}
+                <button
+                  type="button"
+                  onClick={() => setSellPickerOpen(true)}
+                  disabled={!ready || busy}
+                  aria-haspopup="dialog"
+                  aria-expanded={sellPickerOpen}
+                  aria-label={`Send currency: ${sellCoin.symbol}. Tap to change.`}
+                  className="flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-40"
+                >
+                  <CoinIcon coin={sellCoin} size={24} />
+                  {sellCoin.symbol}
+                </button>
                 <button
                   type="button"
                   onClick={fillMax}
                   disabled={
-                    !ready || busy || usdtBalance === null || usdtBalance === 0n
+                    !ready || busy || sellBalance === null || sellBalance === 0n
                   }
                   className="shrink-0 rounded-xl border border-green-600 px-4 py-3 text-sm font-bold text-green-700 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   MAX
                 </button>
               </div>
-              {usdtBalance !== null && (
+              {sellBalance !== null && allDecimals[sellCurrency] !== undefined && (
                 <p className="mt-1 text-xs text-slate-500">
-                  Balance: {formatTokenAmount(usdtBalance, sellDecimals)} USD₮
+                  Balance: {formatTokenAmount(sellBalance, sellDecimals)}{" "}
+                  {sellCoin.symbol}
                 </p>
               )}
             </div>
             <div>
-              <label
-                htmlFor="currency"
-                className="block text-sm font-semibold text-slate-800"
-              >
+              <span className="block text-sm font-semibold text-slate-800">
                 They receive
-              </label>
-              <select
-                id="currency"
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value as LocalStablecoin)}
+              </span>
+              {/* Same MiniPay picker as the send side — the list always
+                  excludes the selected send currency. */}
+              <button
+                type="button"
+                onClick={() => setReceivePickerOpen(true)}
                 disabled={!ready || busy}
-                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
+                aria-haspopup="dialog"
+                aria-expanded={receivePickerOpen}
+                aria-label={`Receive currency: ${receiveCoin.symbol}. Tap to change.`}
+                className="mt-1 flex w-full items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:bg-slate-50 disabled:opacity-60"
               >
-                {LOCAL_STABLECOINS.map((c) => (
-                  <option key={c} value={c}>
-                    {LOCAL_STABLECOIN_LABELS[c]}
-                  </option>
-                ))}
-              </select>
+                <CoinIcon coin={receiveCoin} size={24} />
+                {receiveCoin.symbol}
+                <span className="font-normal text-slate-500">
+                  — {receiveCoin.name}
+                </span>
+              </button>
               {celoBalance !== null && celoBalance === 0n && (
                 <p className="mt-1 text-xs text-amber-700">
                   Your CELO balance is 0 — you need a little CELO for gas.
@@ -715,6 +822,29 @@ export function PayFlow({
           {previewLoading && (
             <p className="text-xs text-slate-500">Getting estimate…</p>
           )}
+
+          {/* Send and receive currency pickers — the same shared
+              MiniPay sheet as the balance card. */}
+          <CoinPicker
+            open={sellPickerOpen}
+            onClose={() => setSellPickerOpen(false)}
+            coins={SENDABLE_COINS}
+            selectedKey={sellCurrency}
+            onSelect={(c) => selectSellCurrency(c as FlowCurrency)}
+            balances={allBalances}
+            decimals={allDecimals}
+            title="Send currency"
+          />
+          <CoinPicker
+            open={receivePickerOpen}
+            onClose={() => setReceivePickerOpen(false)}
+            coins={receiveCoins}
+            selectedKey={currency}
+            onSelect={(c) => selectReceiveCurrency(c as FlowCurrency)}
+            balances={allBalances}
+            decimals={allDecimals}
+            title="They receive"
+          />
         </div>
       )}
 
@@ -725,7 +855,8 @@ export function PayFlow({
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">You spend</dt>
               <dd className="font-semibold text-slate-800">
-                {formatTokenAmount(BigInt(preview.takerPays), sellDecimals)} USD₮
+                {formatTokenAmount(BigInt(preview.takerPays), sellDecimals)}{" "}
+                {sellCoin.symbol}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
@@ -737,14 +868,15 @@ export function PayFlow({
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">Fee</dt>
               <dd className="font-semibold text-slate-800">
-                {formatTokenAmount(BigInt(preview.feeAmount), sellDecimals)} USD₮
+                {formatTokenAmount(BigInt(preview.feeAmount), sellDecimals)}{" "}
+                {sellCoin.symbol}
               </dd>
             </div>
             {rate !== null && (
               <div className="flex justify-between gap-4">
                 <dt className="text-slate-500">Rate</dt>
                 <dd className="font-semibold text-slate-800">
-                  1 USD₮ ≈ {rate.toLocaleString(undefined, { maximumFractionDigits: 4 })} {currency}
+                  1 {sellCoin.symbol} ≈ {rate.toLocaleString(undefined, { maximumFractionDigits: 4 })} {currency}
                 </dd>
               </div>
             )}
@@ -780,7 +912,8 @@ export function PayFlow({
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">You pay</dt>
               <dd className="font-semibold text-slate-800">
-                {formatTokenAmount(BigInt(firm.quote.takerPays), sellDecimals)} USD₮
+                {formatTokenAmount(BigInt(firm.quote.takerPays), sellDecimals)}{" "}
+                {sellCoin.symbol}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
@@ -792,7 +925,8 @@ export function PayFlow({
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">Fee</dt>
               <dd className="font-semibold text-slate-800">
-                {formatTokenAmount(BigInt(firm.quote.feeAmount), sellDecimals)} USD₮
+                {formatTokenAmount(BigInt(firm.quote.feeAmount), sellDecimals)}{" "}
+                {sellCoin.symbol}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
@@ -809,7 +943,7 @@ export function PayFlow({
               <div className="flex justify-between gap-4">
                 <dt className="text-slate-500">Rate</dt>
                 <dd className="font-semibold text-slate-800">
-                  1 USD₮ ≈ {rate.toLocaleString(undefined, { maximumFractionDigits: 4 })} {currency}
+                  1 {sellCoin.symbol} ≈ {rate.toLocaleString(undefined, { maximumFractionDigits: 4 })} {currency}
                 </dd>
               </div>
             )}
@@ -879,7 +1013,7 @@ export function PayFlow({
                         done || active ? "text-slate-800" : "text-slate-400"
                       }`}
                     >
-                      {STEP_LABELS[step]}
+                      {stepLabels[step]}
                       {active && busy ? "…" : ""}
                     </p>
                     {stepHash && <TxLink hash={stepHash} label="Transaction" />}
@@ -917,7 +1051,8 @@ export function PayFlow({
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">You paid</dt>
               <dd className="font-semibold text-slate-800">
-                {formatTokenAmount(BigInt(firm.quote.takerPays), sellDecimals)} USD₮
+                {formatTokenAmount(BigInt(firm.quote.takerPays), sellDecimals)}{" "}
+                {sellCoin.symbol}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
@@ -932,7 +1067,8 @@ export function PayFlow({
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">Fee</dt>
               <dd className="font-semibold text-slate-800">
-                {formatTokenAmount(BigInt(firm.quote.feeAmount), sellDecimals)} USD₮
+                {formatTokenAmount(BigInt(firm.quote.feeAmount), sellDecimals)}{" "}
+                {sellCoin.symbol}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
