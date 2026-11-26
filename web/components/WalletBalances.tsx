@@ -25,7 +25,8 @@ const COIN_KEY = "paybridge.balanceCoin";
  * Wallet balance card — the top of a normal wallet home screen, in the
  * MiniPay style: a green card with the "Total" label at the top, the big
  * balance in the middle, and the coin selector as a row at the bottom
- * of the card (logo + symbol only, no chevron) that opens the picker.
+ * of the card (logo + symbol + a small down-chevron, like MiniPay)
+ * that opens the picker.
  *
  * - Coin picker: tapping the bottom row opens a bottom sheet listing all
  *   eight coins with their real logos and balances; tapping a coin
@@ -206,10 +207,11 @@ export function WalletBalances() {
         )}
 
         {/* Coin selector — a row at the bottom of the card, logo +
-            symbol only, no chevron. Tapping it opens the picker
-            sheet. Separate tap target from the balance above; it
-            never toggles hide/show. Shown whether connected or not,
-            so the card keeps its shape before connecting. */}
+            symbol + a small down-chevron, so users can tell it opens a
+            dropdown. Tapping it opens the picker sheet. Separate tap
+            target from the balance above; it never toggles hide/show.
+            Shown whether connected or not, so the card keeps its shape
+            before connecting. */}
         <button
           type="button"
           onClick={() => setPickerOpen(true)}
@@ -222,6 +224,18 @@ export function WalletBalances() {
           <span className="text-sm font-semibold text-white">
             {selected.symbol}
           </span>
+          <svg
+            aria-hidden="true"
+            className="h-4 w-4 text-green-200"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
         </button>
       </section>
 
