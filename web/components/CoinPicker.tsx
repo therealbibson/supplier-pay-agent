@@ -172,10 +172,10 @@ export function CoinPicker({
         className="absolute inset-0 cursor-default bg-black/50"
       />
       <div
-        className={`absolute inset-x-0 bottom-0 mx-auto w-full max-w-lg animate-slide-up rounded-t-3xl bg-white p-4 pb-6 shadow-2xl ${className ?? ""}`}
+        className={`absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-lg animate-slide-up flex-col rounded-t-3xl bg-white p-4 pb-6 shadow-2xl max-h-[85dvh] ${className ?? ""}`}
       >
-        <div className="mx-auto h-1.5 w-10 rounded-full bg-slate-200" />
-        <div className="mt-3 flex items-center justify-between px-1">
+        <div className="mx-auto h-1.5 w-10 shrink-0 rounded-full bg-slate-200" />
+        <div className="mt-3 flex shrink-0 items-center justify-between px-1">
           <h2 className="text-base font-bold text-slate-800">{title}</h2>
           <button
             type="button"
@@ -186,7 +186,11 @@ export function CoinPicker({
             <CloseIcon />
           </button>
         </div>
-        <ul className="mt-2 divide-y divide-slate-100">
+        {/* The list scrolls inside the sheet (max height above) while
+            the handle and title stay put — without this the rows below
+            the fold could never be reached, since body scroll is locked
+            while the picker is open. */}
+        <ul className="mt-2 min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto overscroll-contain">
           {coins.map((c) => {
             const isSelected = c.key === selectedKey;
             const bal = balances?.[c.key] ?? null;
