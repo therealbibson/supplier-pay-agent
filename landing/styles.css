@@ -1,0 +1,334 @@
+/* PayBridge landing page — matches the project: white background, slate text,
+   vivid Celo green accent. No teal anywhere. */
+
+:root {
+  --bg: #ffffff;
+  --ink: #1e293b;
+  --ink-soft: #334155;
+  --muted: #64748b;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --accent: #16a34a;
+  --accent-hover: #15803d;
+  --accent-soft: #f0fdf4;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .brand-name {
+  font-family: "Inter", system-ui, sans-serif;
+  line-height: 1.15;
+  margin: 0;
+}
+
+a { color: var(--ink); }
+
+.wrap {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Header */
+.site-header {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.brand-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: block;
+}
+
+.brand-name {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.brand-dot { color: var(--accent); }
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.site-nav a {
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.site-nav a:hover { color: var(--ink); }
+
+/* Buttons */
+.btn {
+  display: inline-block;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 11px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-small { padding: 8px 16px; font-size: 14px; }
+
+.btn-primary {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.btn-primary:hover { background: var(--accent-hover); }
+
+.btn-ghost { background: transparent; color: var(--accent); }
+
+.btn-ghost:hover { background: var(--accent-soft); }
+
+/* Hero */
+.hero { padding: 72px 0 56px; }
+
+.eyebrow {
+  margin: 0 0 18px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.hero h1 {
+  font-size: clamp(34px, 5.5vw, 54px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  max-width: 640px;
+}
+
+.lede {
+  margin: 20px 0 0;
+  font-size: 18px;
+  color: var(--ink-soft);
+  max-width: 600px;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+/* Sections */
+.section { padding: 40px 0 56px; }
+
+.section h2 {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+
+.section-intro {
+  margin: 0 0 24px;
+  color: var(--muted);
+}
+
+.note {
+  margin: 20px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* Cards */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* Steps */
+.steps {
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.step { padding: 24px; }
+
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #ffffff;
+  font-family: "Inter", sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  margin-bottom: 16px;
+}
+
+.step h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.step p { margin: 0; color: var(--ink-soft); font-size: 15px; }
+
+/* Proof */
+.proof { padding: 8px 24px; }
+
+.proof-list { margin: 0; }
+
+.proof-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 16px;
+  align-items: baseline;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.proof-row:last-child { border-bottom: none; }
+
+.proof-row dt {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.proof-row dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.value { font-weight: 600; }
+
+.mono {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 14px;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.address { font-size: 13px; }
+
+.proof-link {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.proof-link:hover { text-decoration: underline; }
+
+.copy-btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.copy-btn:hover { background: var(--accent-soft); }
+
+/* Demo placeholder */
+.demo-placeholder {
+  margin-top: 20px;
+  padding: 24px;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: var(--radius);
+  background: transparent;
+}
+
+.demo-label {
+  margin: 0 0 8px;
+  font-family: "Inter", sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.demo-placeholder p { margin: 0 0 8px; color: var(--ink-soft); font-size: 15px; }
+
+.demo-placeholder p:last-child { margin-bottom: 0; }
+
+.demo-tx { font-size: 14px; }
+
+.demo-tx-empty { color: var(--muted); }
+
+/* Footer */
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 32px 0 40px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.footer-inner p { margin: 0 0 8px; }
+
+.footer-inner p:last-child { margin-bottom: 0; }
+
+.site-footer a { color: var(--ink); }
+
+.footer-links a { text-decoration: none; font-weight: 500; }
+
+.footer-links a:hover { text-decoration: underline; }
+
+/* Mobile */
+@media (max-width: 680px) {
+  .hero { padding: 48px 0 40px; }
+  .steps { grid-template-columns: 1fr; }
+  .proof-row { grid-template-columns: 1fr; gap: 4px; }
+  .site-nav a:not(.btn) { display: none; }
+}

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PayBridge — Pay overseas suppliers in their local stablecoin</title>
+  <meta name="description" content="PayBridge is an agent that gets a Textile FX quote and pays an overseas supplier in their local stablecoin on Celo.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/png" href="logo.png">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="#">
+        <img class="brand-logo" src="logo.png" alt="PayBridge logo" width="36" height="36">
+        <span class="brand-name">PayBridge<span class="brand-dot">.</span></span>
+      </a>
+      <nav class="site-nav">
+        <a href="#how-it-works">How it works</a>
+        <a href="#live-proof">Live proof</a>
+        <a class="btn btn-small" href="https://github.com/therealbibson/supplier-pay-agent" target="_blank" rel="noopener">GitHub ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="wrap">
+        <p class="eyebrow">Celo &middot; Agents Open for Business &mdash; Stablecoin Corridors</p>
+        <h1>Pay overseas suppliers in their local stablecoin.</h1>
+        <p class="lede">PayBridge is an agent that gets a Textile FX quote and pays an overseas supplier in their local stablecoin on Celo.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="https://github.com/therealbibson/supplier-pay-agent" target="_blank" rel="noopener">View on GitHub ↗</a>
+          <a class="btn btn-ghost" href="#live-proof">See live proof</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="section" id="how-it-works">
+      <div class="wrap">
+        <h2>How it works</h2>
+        <ol class="steps">
+          <li class="card step">
+            <span class="step-number">1</span>
+            <h3>Get a quote</h3>
+            <p>The agent requests a Textile FX quote &mdash; USD&#8377; &rarr; cNGN and other corridors.</p>
+          </li>
+          <li class="card step">
+            <span class="step-number">2</span>
+            <h3>Swap on Celo</h3>
+            <p>The swap runs on Celo mainnet, with the attribution tag on-chain.</p>
+          </li>
+          <li class="card step">
+            <span class="step-number">3</span>
+            <h3>Supplier paid</h3>
+            <p>The supplier receives payment in their local stablecoin.</p>
+          </li>
+        </ol>
+        <p class="note">Corridors: USD&#8377; &harr; cNGN, IDRX, wBRL, wARS, wMXN, wCOP.</p>
+      </div>
+    </section>
+
+    <!-- Live proof -->
+    <section class="section" id="live-proof">
+      <div class="wrap">
+        <h2>Live proof</h2>
+        <p class="section-intro">Registered on Celo mainnet. Verifiable on Celoscan.</p>
+        <div class="card proof">
+          <dl class="proof-list">
+            <div class="proof-row">
+              <dt>ERC-8004 Agent ID</dt>
+              <dd>
+                <span class="value">10115</span>
+                <a class="proof-link" href="https://celoscan.io/tx/0x2c0f3c3d89ff1fd26eef5d3e770abe748b8085520b18b6c0c12c52ce7977991d" target="_blank" rel="noopener">View registration transaction ↗</a>
+              </dd>
+            </div>
+            <div class="proof-row">
+              <dt>Self Agent ID</dt>
+              <dd>
+                <span class="value">219</span>
+                <a class="proof-link" href="https://celoscan.io/token/0xaC3DF9ABf80d0F5c020C06B04Cced27763355944?a=219" target="_blank" rel="noopener">View on Celoscan ↗</a>
+              </dd>
+            </div>
+            <div class="proof-row">
+              <dt>Attribution Tag</dt>
+              <dd>
+                <code class="value mono">celo_7f040b6e9d4f</code>
+                <button class="copy-btn" type="button" data-copy="celo_7f040b6e9d4f" aria-label="Copy attribution tag">Copy</button>
+              </dd>
+            </div>
+            <div class="proof-row">
+              <dt>Agent Wallet</dt>
+              <dd>
+                <code class="value mono address">0x44e04FD0Fb66C395EE81e968E2b9E66AF002A0e6</code>
+                <a class="proof-link" href="https://celoscan.io/address/0x44e04FD0Fb66C395EE81e968E2b9E66AF002A0e6" target="_blank" rel="noopener">View on Celoscan ↗</a>
+                <button class="copy-btn" type="button" data-copy="0x44e04FD0Fb66C395EE81e968E2b9E66AF002A0e6" aria-label="Copy agent wallet address">Copy</button>
+              </dd>
+            </div>
+          </dl>
+        </div>
+
+        <!-- Live demo transaction: not yet run -->
+        <div class="demo-placeholder" aria-label="Live demo transaction, coming soon">
+          <p class="demo-label">Live demo transaction &mdash; coming soon</p>
+          <p>The first live mainnet run &mdash; quote &rarr; swap &rarr; payout &mdash; has not happened yet. The transaction link will appear here once it does.</p>
+          <p class="demo-tx">Transaction: <span class="demo-tx-empty">&mdash;</span></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <p>PayBridge &mdash; built for the <a href="https://www.loops.house/agents-open-for-business" target="_blank" rel="noopener">Celo Agents Open for Business</a> hackathon (<a href="https://www.loops.house/agents-open-for-business" target="_blank" rel="noopener">Stablecoin Corridors</a> track).</p>
+      <p class="footer-links">
+        <a href="https://github.com/therealbibson/supplier-pay-agent" target="_blank" rel="noopener">GitHub</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="https://www.loops.house/agents-open-for-business" target="_blank" rel="noopener">Hackathon</a>
+      </p>
+      <p class="footer-copy">&copy; <span id="year">2026</span> PayBridge</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
