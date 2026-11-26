@@ -16,3 +16,36 @@ body {
   color: var(--foreground);
   font-family: var(--font-inter), Arial, Helvetica, sans-serif;
 }
+
+/**
+ * Slide-up / slide-down motion shared by the flow screens and bottom
+ * sheets (MiniPay-style): a screen or sheet enters from the bottom of the
+ * viewport and, where the screen owns its exit, slides back down before
+ * leaving. ~300ms, ease-out, matching the coin picker sheet's language.
+ *
+ * Tailwind v4 note: plain @keyframes at the top level are dropped from
+ * the built CSS, so the keyframes live inside @theme — that generates
+ * the animate-slide-up / animate-slide-down utilities when used.
+ */
+@theme {
+  --animate-slide-up: slide-up 300ms ease-out both;
+  --animate-slide-down: slide-down 300ms ease-out both;
+
+  @keyframes slide-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slide-down {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(100%);
+    }
+  }
+}

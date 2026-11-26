@@ -6,34 +6,21 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { BottomNav } from "@/components/BottomNav";
 import { WalletBalances } from "@/components/WalletBalances";
-import { PayFlow } from "@/components/PayFlow";
 import { RecentPayments } from "@/components/RecentPayments";
 import { GITHUB_REPO } from "@/lib/config";
+import Link from "next/link";
 
 /**
  * Home is the wallet itself: balances, send, activity, trust strip.
  * MiniPay-style: green balance card, Send / Receive actions beneath it,
- * then the send form and recent activity. No marketing sections — How it
- * works lives on its own page. Activity is a preview of the same on-chain
- * history the History page shows; a completed payment just nudges it to
- * refresh.
+ * then recent activity. Send lives on its own screen (/send). No
+ * marketing sections — How it works lives on its own page. Activity is a
+ * preview of the same on-chain history the History page shows.
  */
 export default function Home() {
-  const [historyTick, setHistoryTick] = useState(0);
   const [showReceive, setShowReceive] = useState(false);
   const [copied, setCopied] = useState(false);
   const { address, isConnected } = useAccount();
-
-  function scrollToSend() {
-    document
-      .getElementById("send-payment")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    // Focus the amount input if the form is usable.
-    window.setTimeout(() => {
-      const input = document.getElementById("amount") as HTMLInputElement | null;
-      if (input && !input.disabled) input.focus({ preventScroll: true });
-    }, 450);
-  }
 
   async function copyAddress() {
     if (!address) return;
@@ -54,9 +41,8 @@ export default function Home() {
         <WalletBalances />
 
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={scrollToSend}
+          <Link
+            href="/send"
             className="flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-4 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-green-700"
           >
             <svg
@@ -74,7 +60,7 @@ export default function Home() {
               <polygon points="22 2 15 22 11 13 2 9 22 2" />
             </svg>
             Send
-          </button>
+          </Link>
           <button
             type="button"
             onClick={() => setShowReceive((v) => !v)}
@@ -99,41 +85,8 @@ export default function Home() {
           </button>
         </div>
 
-        {showReceive && (
-          <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-bold text-slate-800">
-              Receive on Celo
-            </p>
-            {isConnected && address ? (
-              <>
-                <p className="mt-1 text-xs text-slate-500">
-                  Share this address to receive stablecoins on Celo mainnet.
-                </p>
-                <p className="mt-3 break-all font-mono text-sm font-medium text-slate-800">
-                  {address}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void copyAddress()}
-                  className="mt-3 rounded-full bg-green-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-green-700"
-                >
-                  {copied ? "Copied ✓" : "Copy address"}
-                </button>
-              </>
-            ) : (
-              <p className="mt-1 text-sm text-slate-500">
-                Connect your wallet above to see your receive address.
-              </p>
-            )}
-          </div>
-        )}
-
-        <div id="send-payment" className="mt-4 scroll-mt-24">
-          <PayFlow onPaymentDone={() => setHistoryTick((t) => t + 1)} />
-        </div>
-
         <div className="mt-8">
-          <RecentPayments refreshTick={historyTick} />
+          <RecentPayments />
         </div>
 
         <section className="mt-8 rounded-3xl border border-green-600 bg-green-50 p-5 shadow-sm">
@@ -155,6 +108,77 @@ export default function Home() {
           </a>
         </section>
       </main>
+
+      {/* Receive is a bottom sheet, same language as the coin picker:
+          backdrop, white sheet with rounded top corners, drag handle,
+          close affordance, sliding up from the bottom. */}
+      {showReceive && (
+        <div
+          className="fixed inset-0 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Receive on Celo"
+        >
+          <button
+            type="button"
+            aria-label="Close receive"
+            onClick={() => setShowReceive(false)}
+            className="absolute inset-0 cursor-default bg-black/50"
+          />
+          <div className="animate-slide-up absolute inset-x-0 bottom-0 mx-auto w-full max-w-lg rounded-t-3xl bg-white p-4 pb-6 shadow-2xl">
+            <div className="mx-auto h-1.5 w-10 rounded-full bg-slate-200" />
+            <div className="mt-3 flex items-center justify-between px-1">
+              <h2 className="text-base font-bold text-slate-800">
+                Receive on Celo
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowReceive(false)}
+                aria-label="Close"
+                className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100"
+              >
+                <svg
+                  width={18}
+                  height={18}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-1 pb-1 pt-2">
+              {isConnected && address ? (
+                <>
+                  <p className="text-xs text-slate-500">
+                    Share this address to receive stablecoins on Celo mainnet.
+                  </p>
+                  <p className="mt-3 break-all font-mono text-sm font-medium text-slate-800">
+                    {address}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void copyAddress()}
+                    className="mt-4 rounded-full bg-green-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-green-700"
+                  >
+                    {copied ? "Copied ✓" : "Copy address"}
+                  </button>
+                </>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  Connect your wallet above to see your receive address.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <Footer />
       <BottomNav />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { erc20Abi, formatUnits, isAddress, parseUnits, type Address, type Hex } from "viem";
 import { formatDecimalAmount, formatTokenAmount } from "@/lib/format";
 import {
@@ -86,11 +87,19 @@ const STEP_LABELS: Record<ExecStep, string> = {
 
 export function PayFlow({
   onPaymentDone,
+  onBackToWallet,
 }: {
   /** Called once when a payment completes, so the history preview can refresh. */
   onPaymentDone?: () => void;
+  /**
+   * Called instead of navigating home directly when the done panel's
+   * "Back to wallet" is tapped — lets the hosting screen animate its
+   * exit (e.g. slide back down) before leaving. Defaults to router.push("/").
+   */
+  onBackToWallet?: () => void;
 }) {
   const { address, isConnected, chainId } = useAccount();
+  const router = useRouter();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
   const { signTypedDataAsync } = useSignTypedData();
@@ -927,13 +936,25 @@ export function PayFlow({
               on Celoscan.
             </p>
           )}
-          <button
-            type="button"
-            onClick={resetAll}
-            className="mt-5 rounded-full bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"
-          >
-            Make another payment
-          </button>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={resetAll}
+              className="rounded-full bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"
+            >
+              Make another payment
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (onBackToWallet) onBackToWallet();
+                else router.push("/");
+              }}
+              className="rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Back to wallet
+            </button>
+          </div>
         </div>
       )}
     </div>
