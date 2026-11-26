@@ -95,7 +95,7 @@ export function PayFlow({
   const { signTypedDataAsync } = useSignTypedData();
 
   const [supplier, setSupplier] = useState("");
-  const [amount, setAmount] = useState("50");
+  const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<LocalStablecoin>("cNGN");
   const [invoice, setInvoice] = useState("");
   const [stage, setStage] = useState<Stage>("form");
@@ -114,6 +114,8 @@ export function PayFlow({
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [checkingFill, setCheckingFill] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewNonce, setPreviewNonce] = useState(0);
 
   const progressRef = useRef<{
     approvalHash: Hex | null;
@@ -122,6 +124,8 @@ export function PayFlow({
     submitted: boolean;
   }>({ approvalHash: null, swapHash: null, payoutHash: null, submitted: false });
   const reportedRef = useRef(false);
+  const previewReqRef = useRef(0);
+  const lastPreviewKeyRef = useRef("");
 
   const onCelo = isConnected && chainId === CHAIN.id;
   const ready = onCelo && !!address && !!publicClient && !!walletClient;
@@ -196,52 +200,77 @@ export function PayFlow({
     return () => clearInterval(id);
   }, [stage, firm]);
 
-  function validateForm(): string | null {
-    if (!isAddress(supplier)) return "Enter a valid supplier wallet address (0x…).";
-    if (address && supplier.toLowerCase() === address.toLowerCase()) {
-      return "The supplier address is your own wallet — enter the supplier's address.";
-    }
-    const n = Number(amount);
-    if (!amount || Number.isNaN(n) || n <= 0) return "Enter an amount in USD₮.";
-    if (n < 1) return "Minimum is about $1.";
-    return null;
-  }
-
-  async function getEstimate() {
-    const problem = validateForm();
-    if (problem) {
-      setError(problem);
+  // Live estimate: fetch a preview quote automatically as the user types.
+  // Only runs when the wallet is connected on Celo and the inputs are
+  // valid; incomplete input shows no estimate and no error banner.
+  useEffect(() => {
+    // Any new run invalidates a preview fetch scheduled or in flight from a
+    // previous run, so fast typing can never show a stale estimate.
+    previewReqRef.current += 1;
+    if (!ready || stage === "executing" || stage === "done") return;
+    // Inputs changed while a firm quote was showing: that quote was for the
+    // old inputs, so drop it and fall back to a live preview.
+    if (stage === "confirm") {
+      setFirm(null);
+      setStage("preview");
       return;
     }
-    // Auto-generate an invoice reference if the user left it blank.
-    if (!invoice.trim()) setInvoice(`INV-${Date.now()}`);
-    setError(null);
-    setBusy(true);
-    try {
-      const sellAmount = parseUnits(amount, sellDecimals);
-      const p = await previewQuote({
-        chainId: CHAIN.id,
-        sellToken: TOKENS.USD_T,
-        buyToken: TOKENS[currency],
-        sellAmount: sellAmount.toString(),
-      });
-      if (!p) {
-        setError(
-          "No quote available for this corridor right now — makers may be offline. Try again in a bit, or try a smaller amount.",
-        );
-        return;
-      }
-      setPreview(p);
-      setStage("preview");
-    } catch (err) {
-      setError(friendlyError(err));
-    } finally {
-      setBusy(false);
+    const trimmedAmount = amount.trim();
+    const n = Number(trimmedAmount);
+    const inputsValid =
+      isAddress(supplier) &&
+      !(address && supplier.toLowerCase() === address.toLowerCase()) &&
+      /^\d+(\.\d+)?$/.test(trimmedAmount) &&
+      !Number.isNaN(n) &&
+      n >= 1;
+    if (!inputsValid) {
+      setPreview(null);
+      setPreviewLoading(false);
+      if (stage === "preview") setStage("form");
+      return;
     }
-  }
+    const key = `${supplier.toLowerCase()}|${trimmedAmount}|${currency}`;
+    if (key === lastPreviewKeyRef.current && preview) return;
+    setPreviewLoading(true);
+    const reqId = previewReqRef.current;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const sellAmount = parseUnits(trimmedAmount, sellDecimals);
+          const p = await previewQuote({
+            chainId: CHAIN.id,
+            sellToken: TOKENS.USD_T,
+            buyToken: TOKENS[currency],
+            sellAmount: sellAmount.toString(),
+          });
+          if (previewReqRef.current !== reqId) return; // stale response
+          if (!p) {
+            setPreview(null);
+            setStage("form");
+            setError(
+              "No quote available for this corridor right now — makers may be offline. Try again in a bit, or try a smaller amount.",
+            );
+            return;
+          }
+          lastPreviewKeyRef.current = key;
+          setError(null);
+          setPreview(p);
+          setStage("preview");
+        } catch (err) {
+          if (previewReqRef.current !== reqId) return;
+          setError(friendlyError(err));
+        } finally {
+          if (previewReqRef.current === reqId) setPreviewLoading(false);
+        }
+      })();
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [supplier, amount, currency, ready, sellDecimals, stage, address, preview, previewNonce]);
 
   async function getFirmQuote() {
     if (!address) return;
+    // Auto-generate an invoice reference if the user left it blank.
+    if (!invoice.trim()) setInvoice(`INV-${Date.now()}`);
     setError(null);
     setBusy(true);
     try {
@@ -425,10 +454,14 @@ export function PayFlow({
       void checkFillAgain();
       return;
     }
-    if (stage === "preview") void getFirmQuote();
-    else if (stage === "confirm") void getFirmQuote();
+    if (stage === "form" || stage === "preview") {
+      // Preview fetch failed: fetch it again live; firm quote failed: ask again.
+      if (preview) void getFirmQuote();
+      else setPreviewNonce((n) => n + 1);
+      return;
+    }
+    if (stage === "confirm") void getFirmQuote();
     else if (stage === "executing") void execute();
-    else void getEstimate();
   }
 
   function resetAll() {
@@ -521,7 +554,7 @@ export function PayFlow({
               value={supplier}
               onChange={(e) => setSupplier(e.target.value.trim())}
               placeholder="0x…"
-              disabled={!ready || stage !== "form" || busy}
+              disabled={!ready || busy}
               className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm text-slate-800 placeholder:text-slate-400 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
             />
           </div>
@@ -539,7 +572,8 @@ export function PayFlow({
                 inputMode="decimal"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                disabled={!ready || stage !== "form" || busy}
+                placeholder="0.00"
+                disabled={!ready || busy}
                 className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-lg font-semibold text-slate-800 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
               />
               {usdtBalance !== null && (
@@ -559,7 +593,7 @@ export function PayFlow({
                 id="currency"
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value as LocalStablecoin)}
-                disabled={!ready || stage !== "form" || busy}
+                disabled={!ready || busy}
                 className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
               >
                 {LOCAL_STABLECOINS.map((c) => (
@@ -588,20 +622,13 @@ export function PayFlow({
               value={invoice}
               onChange={(e) => setInvoice(e.target.value)}
               placeholder="Auto-generated if left blank"
-              disabled={!ready || stage !== "form" || busy}
+              disabled={!ready || busy}
               className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-green-600 focus:outline-none disabled:bg-slate-50"
             />
           </div>
 
-          {stage === "form" && (
-            <button
-              type="button"
-              onClick={() => void getEstimate()}
-              disabled={!ready || busy}
-              className="w-full rounded-full bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:opacity-50"
-            >
-              {busy ? "Getting estimate…" : "Get estimate"}
-            </button>
+          {previewLoading && (
+            <p className="text-xs text-slate-500">Getting estimate…</p>
           )}
         </div>
       )}
@@ -657,18 +684,6 @@ export function PayFlow({
               className="rounded-full bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:opacity-50"
             >
               {busy ? "Requesting firm quote… (up to ~70s)" : "Get firm quote"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setStage("form");
-                setPreview(null);
-                setError(null);
-              }}
-              disabled={busy}
-              className="rounded-full border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-            >
-              Edit
             </button>
           </div>
         </div>
