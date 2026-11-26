@@ -8,6 +8,7 @@ import { CELOSCAN, CHAIN, TOKENS } from "@/lib/config";
 import { tokenBalance, tokenDecimals } from "@/lib/execute";
 import { formatTokenAmount, formatTwoDecimals } from "@/lib/format";
 import { previewQuote } from "@/lib/textile";
+import { fetchTokenPriceUsd, usdValueFromPrice } from "@/lib/price";
 import { COINS, CoinIcon, CoinPicker, type CoinDef, type CoinKey } from "./CoinPicker";
 
 function shortAddress(address: string) {
@@ -56,9 +57,12 @@ const COIN_KEY = "paybridge.balanceCoin";
  *   balance shows sign + dots only (e.g. "₦ ••••••").
  * - Under the big balance, a small not-bold line shows what the
  *   balance is worth in USDT (e.g. "≈ $49.95"), MiniPay-style —
- *   only for a non-USD₮ coin with a real balance and a Textile
- *   preview quote; hidden balances show "≈ ••••••" instead, and a
- *   missing quote shows no line at all.
+ *   only for a non-USD₮ coin with a real balance and a price:
+ *   the Textile preview quote first (the real swap value), falling
+ *   back to the CoinGecko market price when Textile has no quote
+ *   (CELO has no Textile corridor; wFIAT makers are often offline).
+ *   Hidden balances show "≈ ••••••" instead, and no price from
+ *   either source shows no line at all.
  * - Type: Inter, loaded self-hosted via next/font/google in
  *   app/layout.tsx (CSS variable --font-inter, wired to --font-sans in
  *   globals.css). MiniPay's exact font family could not be identified
@@ -168,23 +172,26 @@ export function WalletBalances({ onReceive }: { onReceive: () => void }) {
   const celoBalance = balances.CELO ?? null;
 
   // USDT equivalent of the selected coin's balance — the small line
-  // under the big balance, MiniPay-style ("≈ $49.95"). Fetched from
-  // the app's own Textile preview: sell the full balance of the
-  // selected coin for USD₮. Only for a non-USD₮ coin with a real
-  // balance; no quote (or an error) means no line at all, never a
-  // placeholder, zero, or broken value. A stale reply for an old
-  // coin/balance is dropped via the request id.
+  // under the big balance, MiniPay-style ("≈ $49.95"). Primary source
+  // is the app's own Textile preview: sell the full balance of the
+  // selected coin for USD₮ (the real swap value). When Textile has no
+  // quote — CELO has no Textile corridor at all, and wBRL/wARS/wMXN/
+  // wCOP makers are often offline — it falls back to the CoinGecko
+  // market price via /api/price (lib/price.ts). The fallback is only
+  // fetched when the preview returned no quote, never alongside it.
+  // Only for a non-USD₮ coin with a real balance; no price from
+  // either source means no line at all, never a placeholder, zero, or
+  // broken value. A stale reply for an old coin/balance is dropped
+  // via the request id.
   const [usdtEquivalent, setUsdtEquivalent] = useState<bigint | null>(null);
   const usdtReqRef = useRef(0);
   const usdtDecimals = decimals["USD_T"];
 
   useEffect(() => {
-    const sellToken = selected.token ? TOKENS[selected.token] : undefined;
     if (
       !isConnected ||
       !address ||
       coin === "USD_T" ||
-      !sellToken ||
       selectedBalance === null ||
       selectedBalance === 0n ||
       selectedDecimals === undefined ||
@@ -195,23 +202,47 @@ export function WalletBalances({ onReceive }: { onReceive: () => void }) {
       return;
     }
     const reqId = ++usdtReqRef.current;
+    const sellToken = selected.token ? TOKENS[selected.token] : undefined;
     void (async () => {
+      // Primary: the real swap value from Textile.
+      if (sellToken) {
+        try {
+          const p = await previewQuote({
+            chainId: CHAIN.id,
+            sellToken,
+            buyToken: TOKENS.USD_T,
+            sellAmount: selectedBalance.toString(),
+          });
+          if (usdtReqRef.current !== reqId) return; // stale response
+          if (p && BigInt(p.buyAmount) > 0n) {
+            setUsdtEquivalent(BigInt(p.buyAmount));
+            return;
+          }
+        } catch {
+          if (usdtReqRef.current !== reqId) return;
+          // Fall through to the price fallback below.
+        }
+      }
+      // Fallback: market price (CoinGecko via /api/price) — covers
+      // CELO (no Textile corridor) and coins whose makers are offline.
       try {
-        const p = await previewQuote({
-          chainId: CHAIN.id,
-          sellToken,
-          buyToken: TOKENS.USD_T,
-          sellAmount: selectedBalance.toString(),
-        });
+        const price = await fetchTokenPriceUsd(
+          sellToken ? { address: sellToken } : { coin: "CELO" },
+        );
         if (usdtReqRef.current !== reqId) return; // stale response
-        if (!p || BigInt(p.buyAmount) <= 0n) {
+        if (price === null) {
           setUsdtEquivalent(null);
           return;
         }
-        setUsdtEquivalent(BigInt(p.buyAmount));
+        const value = usdValueFromPrice(
+          selectedBalance,
+          selectedDecimals,
+          price,
+        );
+        setUsdtEquivalent(value > 0n ? value : null);
       } catch {
         if (usdtReqRef.current !== reqId) return;
-        setUsdtEquivalent(null); // no quote, no line — never an error state
+        setUsdtEquivalent(null); // no price, no line — never an error state
       }
     })();
   }, [
