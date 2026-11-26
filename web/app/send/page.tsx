@@ -32,8 +32,11 @@ export default function SendPage() {
       }`}
     >
       <main className="mx-auto max-w-lg px-4 pb-10 pt-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+        {/* Title can shrink and truncate so the row always fits at 360px:
+            back arrow and Connect button stay intact, nothing is cut off
+            on the right. */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={goBack}
@@ -55,9 +58,11 @@ export default function SendPage() {
                 <polyline points="12 19 5 12 12 5" />
               </svg>
             </button>
-            <h1 className="text-xl font-bold text-slate-800">Send payment</h1>
+            <h1 className="min-w-0 truncate text-xl font-bold text-slate-800">Send payment</h1>
           </div>
-          <ConnectWallet />
+          <div className="shrink-0">
+            <ConnectWallet />
+          </div>
         </div>
 
         <div className="mt-4">

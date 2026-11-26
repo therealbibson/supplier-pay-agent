@@ -6,10 +6,13 @@ import { erc20Abi, formatUnits, isAddress, parseUnits, type Address, type Hex } 
 import { formatDecimalAmount, formatTokenAmount } from "@/lib/format";
 import {
   useAccount,
+  useConnect,
   usePublicClient,
   useSignTypedData,
+  useSwitchChain,
   useWalletClient,
 } from "wagmi";
+import { injected } from "wagmi/connectors";
 import {
   ATTRIBUTION_TAG,
   CELOSCAN,
@@ -125,6 +128,10 @@ export function PayFlow({
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
   const { signTypedDataAsync } = useSignTypedData();
+  // Connect / network-switch actions for the pre-connect call-to-action
+  // at the bottom of the form (see below).
+  const { connect, isPending: isConnecting } = useConnect();
+  const { switchChain, isPending: isSwitching } = useSwitchChain();
 
   const [supplier, setSupplier] = useState("");
   const [amount, setAmount] = useState("");
@@ -718,7 +725,11 @@ export function PayFlow({
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* Single column at every width: at desktop the two-column
+              split left the amount input crushed to ~33px once the send
+              currency picker and MAX sat beside it. Full width gives the
+              input room and keeps the picker + MAX uncrowded. */}
+          <div className="grid gap-4">
             <div>
               <label
                 htmlFor="amount"
@@ -786,11 +797,11 @@ export function PayFlow({
                 aria-haspopup="dialog"
                 aria-expanded={receivePickerOpen}
                 aria-label={`Receive currency: ${receiveCoin.symbol}. Tap to change.`}
-                className="mt-1 flex w-full items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:bg-slate-50 disabled:opacity-60"
+                className="mt-1 flex w-full min-w-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:bg-slate-50 disabled:opacity-60"
               >
                 <CoinIcon coin={receiveCoin} size={24} />
-                {receiveCoin.symbol}
-                <span className="font-normal text-slate-500">
+                <span className="shrink-0">{receiveCoin.symbol}</span>
+                <span className="min-w-0 flex-1 truncate font-normal text-slate-500">
                   — {receiveCoin.name}
                 </span>
               </button>
@@ -845,6 +856,36 @@ export function PayFlow({
             decimals={allDecimals}
             title="They receive"
           />
+
+          {/* A visible primary action at every stage: before a wallet is
+              connected the form used to end after the Invoice field with
+              nothing to tap, so the page looked dead. This starts the
+              connect flow; on the wrong network it offers the switch
+              instead. Once connected on Celo the quote flow below takes
+              over and this button disappears. */}
+          {(!isConnected || !onCelo) && (
+            <div className="pt-2">
+              {!isConnected ? (
+                <button
+                  type="button"
+                  onClick={() => connect({ connector: injected() })}
+                  disabled={isConnecting}
+                  className="w-full rounded-full bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:opacity-50"
+                >
+                  {isConnecting ? "Connecting…" : "Connect wallet to send"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => switchChain({ chainId: CHAIN.id })}
+                  disabled={isSwitching}
+                  className="w-full rounded-full bg-amber-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {isSwitching ? "Switching…" : "Switch to Celo mainnet"}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -853,29 +894,29 @@ export function PayFlow({
           <p className="text-sm font-semibold text-slate-800">Estimate</p>
           <dl className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">You spend</dt>
-              <dd className="font-semibold text-slate-800">
+              <dt className="shrink-0 text-slate-500">You spend</dt>
+              <dd className="min-w-0 font-semibold text-slate-800">
                 {formatTokenAmount(BigInt(preview.takerPays), sellDecimals)}{" "}
                 {sellCoin.symbol}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Supplier receives (approx.)</dt>
-              <dd className="font-semibold text-slate-800">
+              <dt className="shrink-0 text-slate-500">Supplier receives (approx.)</dt>
+              <dd className="min-w-0 font-semibold text-slate-800">
                 {formatTokenAmount(BigInt(preview.buyAmount), buyDecimals)} {currency}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Fee</dt>
-              <dd className="font-semibold text-slate-800">
+              <dt className="shrink-0 text-slate-500">Fee</dt>
+              <dd className="min-w-0 font-semibold text-slate-800">
                 {formatTokenAmount(BigInt(preview.feeAmount), sellDecimals)}{" "}
                 {sellCoin.symbol}
               </dd>
             </div>
             {rate !== null && (
               <div className="flex justify-between gap-4">
-                <dt className="text-slate-500">Rate</dt>
-                <dd className="font-semibold text-slate-800">
+                <dt className="shrink-0 text-slate-500">Rate</dt>
+                <dd className="min-w-0 font-semibold text-slate-800">
                   1 {sellCoin.symbol} ≈ {rate.toLocaleString(undefined, { maximumFractionDigits: 4 })} {currency}
                 </dd>
               </div>
@@ -910,39 +951,39 @@ export function PayFlow({
           </p>
           <dl className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">You pay</dt>
-              <dd className="font-semibold text-slate-800">
+              <dt className="shrink-0 text-slate-500">You pay</dt>
+              <dd className="min-w-0 font-semibold text-slate-800">
                 {formatTokenAmount(BigInt(firm.quote.takerPays), sellDecimals)}{" "}
                 {sellCoin.symbol}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Supplier receives</dt>
-              <dd className="font-semibold text-slate-800">
+              <dt className="shrink-0 text-slate-500">Supplier receives</dt>
+              <dd className="min-w-0 font-semibold text-slate-800">
                 {formatTokenAmount(BigInt(firm.quote.buyAmount), buyDecimals)} {currency}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Fee</dt>
-              <dd className="font-semibold text-slate-800">
+              <dt className="shrink-0 text-slate-500">Fee</dt>
+              <dd className="min-w-0 font-semibold text-slate-800">
                 {formatTokenAmount(BigInt(firm.quote.feeAmount), sellDecimals)}{" "}
                 {sellCoin.symbol}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Pay to</dt>
-              <dd className="font-mono text-xs font-medium break-all text-slate-800">
+              <dt className="shrink-0 text-slate-500">Pay to</dt>
+              <dd className="min-w-0 break-all font-mono text-xs font-medium text-slate-800">
                 {supplier}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Invoice</dt>
-              <dd className="font-semibold text-slate-800">{invoice || "—"}</dd>
+              <dt className="shrink-0 text-slate-500">Invoice</dt>
+              <dd className="min-w-0 break-all font-semibold text-slate-800">{invoice || "—"}</dd>
             </div>
             {rate !== null && (
               <div className="flex justify-between gap-4">
-                <dt className="text-slate-500">Rate</dt>
-                <dd className="font-semibold text-slate-800">
+                <dt className="shrink-0 text-slate-500">Rate</dt>
+                <dd className="min-w-0 font-semibold text-slate-800">
                   1 {sellCoin.symbol} ≈ {rate.toLocaleString(undefined, { maximumFractionDigits: 4 })} {currency}
                 </dd>
               </div>
@@ -1049,15 +1090,15 @@ export function PayFlow({
           <p className="text-lg font-bold text-slate-800">Payment sent ✓</p>
           <dl className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">You paid</dt>
-              <dd className="font-semibold text-slate-800">
+              <dt className="shrink-0 text-slate-500">You paid</dt>
+              <dd className="min-w-0 font-semibold text-slate-800">
                 {formatTokenAmount(BigInt(firm.quote.takerPays), sellDecimals)}{" "}
                 {sellCoin.symbol}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Supplier received</dt>
-              <dd className="font-semibold text-slate-800">
+              <dt className="shrink-0 text-slate-500">Supplier received</dt>
+              <dd className="min-w-0 font-semibold text-slate-800">
                 {filledBuyAmount
                   ? formatTokenAmount(BigInt(filledBuyAmount), buyDecimals)
                   : formatTokenAmount(BigInt(firm.quote.buyAmount), buyDecimals)}{" "}
@@ -1065,21 +1106,21 @@ export function PayFlow({
               </dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Fee</dt>
-              <dd className="font-semibold text-slate-800">
+              <dt className="shrink-0 text-slate-500">Fee</dt>
+              <dd className="min-w-0 font-semibold text-slate-800">
                 {formatTokenAmount(BigInt(firm.quote.feeAmount), sellDecimals)}{" "}
                 {sellCoin.symbol}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Supplier</dt>
-              <dd className="font-mono text-xs font-medium break-all text-slate-800">
+              <dt className="shrink-0 text-slate-500">Supplier</dt>
+              <dd className="min-w-0 break-all font-mono text-xs font-medium text-slate-800">
                 {supplier}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-500">Invoice</dt>
-              <dd className="font-semibold text-slate-800">{invoice || "—"}</dd>
+              <dt className="shrink-0 text-slate-500">Invoice</dt>
+              <dd className="min-w-0 break-all font-semibold text-slate-800">{invoice || "—"}</dd>
             </div>
           </dl>
           <div className="mt-4 space-y-1.5">
