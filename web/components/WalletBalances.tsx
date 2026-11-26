@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatUnits } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 import { CELOSCAN, TOKENS } from "@/lib/config";
 import { tokenBalance, tokenDecimals } from "@/lib/execute";
+import { formatTokenAmount } from "@/lib/format";
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
@@ -79,12 +79,13 @@ function EyeIcon({ off }: { off?: boolean }) {
 /**
  * Wallet balance card — the top of a normal wallet home screen.
  *
- * - Coin switcher: USD₮, cNGN, IDRX, wBRL, wARS, wMXN, wCOP, CELO. The
- *   selected coin's balance is the large number; the rest show small
- *   beneath. Every balance is read on-chain from the connected wallet
- *   (decimals read on-chain too, never guessed); CELO is the native
- *   balance (18 decimals).
+ * - Coin selector (dropdown): USD₮, cNGN, IDRX, wBRL, wARS, wMXN, wCOP,
+ *   CELO. The selected coin's balance is the large number; the rest show
+ *   small beneath. Every balance is read on-chain from the connected
+ *   wallet (decimals read on-chain too, never guessed); CELO is the
+ *   native balance (18 decimals).
  * - Eye toggle: hides every amount on the card behind "••••••".
+ * - Amounts are shown with 2–4 decimal places (see lib/format.ts).
  * - Gated on connection: before the user connects, the card shows only
  *   "Connect your wallet above to see your balances" — no address, no
  *   balance, and no chain call is made.
@@ -192,7 +193,7 @@ export function WalletBalances() {
     if (hidden) return `•••••• ${symbol}`;
     if (value === null || value === undefined || dec === undefined)
       return `— ${symbol}`;
-    return `${formatUnits(value, dec)} ${symbol}`;
+    return `${formatTokenAmount(value, dec)} ${symbol}`;
   }
 
   function formatSmall(
@@ -201,7 +202,7 @@ export function WalletBalances() {
   ): string {
     if (hidden) return "••••••";
     if (value === null || value === undefined || dec === undefined) return "—";
-    return formatUnits(value, dec);
+    return formatTokenAmount(value, dec);
   }
 
   return (
@@ -232,27 +233,25 @@ export function WalletBalances() {
 
       {isConnected && address ? (
         <>
-          <div
-            className="mt-4 flex flex-wrap gap-1.5"
-            role="tablist"
-            aria-label="Balance currency"
-          >
-            {COINS.map((c) => (
-              <button
-                key={c.key}
-                type="button"
-                role="tab"
-                aria-selected={coin === c.key}
-                onClick={() => selectCoin(c.key)}
-                className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
-                  coin === c.key
-                    ? "bg-white text-green-700"
-                    : "bg-green-700 text-green-100 hover:bg-green-800"
-                }`}
-              >
-                {c.symbol}
-              </button>
-            ))}
+          <div className="mt-4">
+            <label
+              htmlFor="balance-coin"
+              className="text-xs font-semibold text-green-100"
+            >
+              Balance currency
+            </label>
+            <select
+              id="balance-coin"
+              value={coin}
+              onChange={(e) => selectCoin(e.target.value as BalanceCoin)}
+              className="mt-1 w-full rounded-xl border border-green-500 bg-green-700 px-3 py-2.5 text-sm font-semibold text-white outline-none transition focus:border-white"
+            >
+              {COINS.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.symbol}
+                </option>
+              ))}
+            </select>
           </div>
 
           <p className="mt-3 text-4xl font-extrabold tracking-tight">

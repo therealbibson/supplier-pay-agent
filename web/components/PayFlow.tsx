@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { erc20Abi, formatUnits, isAddress, parseUnits, type Address, type Hex } from "viem";
+import { formatTokenAmount } from "@/lib/format";
 import {
   useAccount,
   usePublicClient,
@@ -578,7 +579,7 @@ export function PayFlow({
               />
               {usdtBalance !== null && (
                 <p className="mt-1 text-xs text-slate-500">
-                  Balance: {formatUnits(usdtBalance, sellDecimals)} USD₮
+                  Balance: {formatTokenAmount(usdtBalance, sellDecimals)} USD₮
                 </p>
               )}
             </div>
@@ -640,19 +641,19 @@ export function PayFlow({
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">You spend</dt>
               <dd className="font-semibold text-slate-800">
-                {formatUnits(BigInt(preview.takerPays), sellDecimals)} USD₮
+                {formatTokenAmount(BigInt(preview.takerPays), sellDecimals)} USD₮
               </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">Supplier receives (approx.)</dt>
               <dd className="font-semibold text-slate-800">
-                {formatUnits(BigInt(preview.buyAmount), buyDecimals)} {currency}
+                {formatTokenAmount(BigInt(preview.buyAmount), buyDecimals)} {currency}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">Fee</dt>
               <dd className="font-semibold text-slate-800">
-                {formatUnits(BigInt(preview.feeAmount), sellDecimals)} USD₮
+                {formatTokenAmount(BigInt(preview.feeAmount), sellDecimals)} USD₮
               </dd>
             </div>
             {rate !== null && (
@@ -698,19 +699,19 @@ export function PayFlow({
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">You pay</dt>
               <dd className="font-semibold text-slate-800">
-                {formatUnits(BigInt(firm.quote.takerPays), sellDecimals)} USD₮
+                {formatTokenAmount(BigInt(firm.quote.takerPays), sellDecimals)} USD₮
               </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">Supplier receives</dt>
               <dd className="font-semibold text-slate-800">
-                {formatUnits(BigInt(firm.quote.buyAmount), buyDecimals)} {currency}
+                {formatTokenAmount(BigInt(firm.quote.buyAmount), buyDecimals)} {currency}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">Fee</dt>
               <dd className="font-semibold text-slate-800">
-                {formatUnits(BigInt(firm.quote.feeAmount), sellDecimals)} USD₮
+                {formatTokenAmount(BigInt(firm.quote.feeAmount), sellDecimals)} USD₮
               </dd>
             </div>
             <div className="flex justify-between gap-4">
@@ -835,22 +836,22 @@ export function PayFlow({
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">You paid</dt>
               <dd className="font-semibold text-slate-800">
-                {formatUnits(BigInt(firm.quote.takerPays), sellDecimals)} USD₮
+                {formatTokenAmount(BigInt(firm.quote.takerPays), sellDecimals)} USD₮
               </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">Supplier received</dt>
               <dd className="font-semibold text-slate-800">
                 {filledBuyAmount
-                  ? formatUnits(BigInt(filledBuyAmount), buyDecimals)
-                  : formatUnits(BigInt(firm.quote.buyAmount), buyDecimals)}{" "}
+                  ? formatTokenAmount(BigInt(filledBuyAmount), buyDecimals)
+                  : formatTokenAmount(BigInt(firm.quote.buyAmount), buyDecimals)}{" "}
                 {currency}
               </dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-slate-500">Fee</dt>
               <dd className="font-semibold text-slate-800">
-                {formatUnits(BigInt(firm.quote.feeAmount), sellDecimals)} USD₮
+                {formatTokenAmount(BigInt(firm.quote.feeAmount), sellDecimals)} USD₮
               </dd>
             </div>
             <div className="flex justify-between gap-4">

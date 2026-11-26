@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CELOSCAN } from "@/lib/config";
+import { formatDecimalAmount } from "@/lib/format";
 import {
   fetchHistory,
   type HistoryCursors,
@@ -72,7 +73,11 @@ function HistoryRow({ e, wallet }: { e: HistoryEntry; wallet: string }) {
       </div>
       <p className="mt-1 text-sm font-semibold text-slate-800">
         {e.amount !== null
-          ? `${e.amount} ${e.tokenSymbol ?? ""}`.trim()
+          ? `${
+              // Fungible amounts are shown with 2–4 decimal places; NFT
+              // amounts are token IDs, so they are left exactly as-is.
+              e.isNft ? e.amount : formatDecimalAmount(e.amount)
+            } ${e.tokenSymbol ?? ""}`.trim()
           : e.isNft
             ? `${e.tokenSymbol ?? "NFT"} NFT`
             : e.type === "approval"
