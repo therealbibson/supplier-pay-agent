@@ -25,21 +25,21 @@ interface CoinDef {
   symbol: string;
   /** Full name shown in the picker. */
   name: string;
-  /** Colour of the coin icon in the picker. */
-  colour: string;
+  /** Real logo image, served from /public/coins. */
+  logo: string;
   /** ERC-20 address; absent for native CELO. */
   token?: keyof typeof TOKENS;
 }
 
 const COINS: CoinDef[] = [
-  { key: "USD_T", symbol: "USD₮", name: "Tether USD", colour: "#16a34a", token: "USD_T" },
-  { key: "cNGN", symbol: "cNGN", name: "Nigerian Naira", colour: "#008751", token: "cNGN" },
-  { key: "IDRX", symbol: "IDRX", name: "Indonesian Rupiah", colour: "#dc2626", token: "IDRX" },
-  { key: "wBRL", symbol: "wBRL", name: "Brazilian Real", colour: "#ca8a04", token: "wBRL" },
-  { key: "wARS", symbol: "wARS", name: "Argentine Peso", colour: "#0ea5e9", token: "wARS" },
-  { key: "wMXN", symbol: "wMXN", name: "Mexican Peso", colour: "#65a30d", token: "wMXN" },
-  { key: "wCOP", symbol: "wCOP", name: "Colombian Peso", colour: "#f59e0b", token: "wCOP" },
-  { key: "CELO", symbol: "CELO", name: "Celo", colour: "#35d07f" },
+  { key: "USD_T", symbol: "USD₮", name: "Tether USD", logo: "/coins/usdt.png", token: "USD_T" },
+  { key: "cNGN", symbol: "cNGN", name: "Nigerian Naira", logo: "/coins/cngn.png", token: "cNGN" },
+  { key: "IDRX", symbol: "IDRX", name: "Indonesian Rupiah", logo: "/coins/idrx.png", token: "IDRX" },
+  { key: "wBRL", symbol: "wBRL", name: "Brazilian Real", logo: "/coins/wbrl.png", token: "wBRL" },
+  { key: "wARS", symbol: "wARS", name: "Argentine Peso", logo: "/coins/wars.png", token: "wARS" },
+  { key: "wMXN", symbol: "wMXN", name: "Mexican Peso", logo: "/coins/wmxn.png", token: "wMXN" },
+  { key: "wCOP", symbol: "wCOP", name: "Colombian Peso", logo: "/coins/wcop.png", token: "wCOP" },
+  { key: "CELO", symbol: "CELO", name: "Celo", logo: "/coins/celo.png" },
 ];
 
 /**
@@ -49,24 +49,6 @@ const COINS: CoinDef[] = [
  */
 const HIDE_KEY = "paybridge.hideBalances";
 const COIN_KEY = "paybridge.balanceCoin";
-
-function ChevronDownIcon() {
-  return (
-    <svg
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-}
 
 function CheckIcon() {
   return (
@@ -104,38 +86,47 @@ function CloseIcon() {
   );
 }
 
-/** Small coloured coin icon: a circle with the symbol's first letter. */
+/** The coin's real logo image, clipped to a circle. */
 function CoinIcon({ coin, size = 36 }: { coin: CoinDef; size?: number }) {
   return (
     <span
       aria-hidden="true"
-      className="flex shrink-0 items-center justify-center rounded-full font-bold text-white"
-      style={{ backgroundColor: coin.colour, width: size, height: size, fontSize: size * 0.42 }}
+      className="block shrink-0 overflow-hidden rounded-full bg-white"
+      style={{ width: size, height: size }}
     >
-      {coin.symbol.charAt(0)}
+      <img
+        src={coin.logo}
+        alt=""
+        width={size}
+        height={size}
+        className="h-full w-full object-cover"
+      />
     </span>
   );
 }
 
 /**
  * Wallet balance card — the top of a normal wallet home screen, in the
- * MiniPay style: a green card, one coin shown big, and the currency
- * picked from a bottom sheet.
+ * MiniPay style: a green card with the "Total" label at the top, the big
+ * balance in the middle, and the coin selector as a row at the bottom
+ * of the card (logo + symbol only, no chevron) that opens the picker.
  *
- * - Coin picker: the selected coin is a button (icon + symbol + chevron).
- *   Tapping it opens a bottom sheet listing all eight coins with their
- *   balances; tapping a coin selects it and closes the sheet. The choice
- *   persists in localStorage. No native <select> anywhere.
+ * - Coin picker: tapping the bottom row opens a bottom sheet listing all
+ *   eight coins with their real logos and balances; tapping a coin
+ *   selects it and closes the sheet. The choice persists in
+ *   localStorage. No native <select> anywhere.
  * - Hide/show: there is no eye icon — tapping the big balance number
  *   itself toggles between the amount and "••••••", with a small hint
  *   underneath so the action is discoverable. The choice persists in
- *   localStorage, and the gas warning stays hidden while masked.
+ *   localStorage, and the gas warning stays hidden while masked. The
+ *   balance and the selector row are separate tap targets.
  * - Only the selected coin's balance is shown on the card — no other
  *   coin's balance is listed.
  * - Amounts are shown with 2–4 decimal places (see lib/format.ts).
- * - Gated on connection: before the user connects, the card shows only
- *   "Connect your wallet above to see your balances" — no address, no
- *   balance, and no chain call is made.
+ * - Gated on connection: before the user connects, the card shows a
+ *   neutral state — "Total" label, a muted "—" where the balance goes,
+ *   and the coin selector row at the bottom — with no instruction text
+ *   and no chain call made.
  */
 export function WalletBalances() {
   const { address, isConnected } = useAccount();
@@ -262,36 +253,24 @@ export function WalletBalances() {
   return (
     <>
       <section className="rounded-3xl bg-green-600 p-6 text-white shadow-md">
-        <div>
+        <div className="flex items-start justify-between gap-3">
           <p className="text-xs font-semibold uppercase tracking-widest text-green-100">
             Total
           </p>
           {isConnected && address && (
-            <p className="mt-1 font-mono text-xs text-green-100">
-              {shortAddress(address)}
-            </p>
+            <a
+              href={`${CELOSCAN}/address/${address}`}
+              target="_blank"
+              rel="noopener"
+              className="font-mono text-xs text-green-100 underline hover:text-white"
+            >
+              {shortAddress(address)} ↗
+            </a>
           )}
         </div>
 
         {isConnected && address ? (
           <>
-            {/* Coin picker button — opens the bottom sheet. Separate tap
-                target from the balance below; it never toggles hide/show. */}
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              aria-haspopup="dialog"
-              aria-expanded={pickerOpen}
-              aria-label={`Balance currency: ${selected.symbol}. Tap to change currency.`}
-              className="mt-4 flex items-center gap-2 rounded-full bg-green-700 py-1.5 pl-1.5 pr-3 text-sm font-semibold text-white transition hover:bg-green-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-            >
-              <CoinIcon coin={selected} size={28} />
-              <span>{selected.symbol}</span>
-              <span className="text-green-200">
-                <ChevronDownIcon />
-              </span>
-            </button>
-
             {/* The balance itself is the hide/show toggle — no eye icon. */}
             <button
               type="button"
@@ -316,24 +295,36 @@ export function WalletBalances() {
                 before you can send anything.
               </p>
             )}
-            <a
-              href={`${CELOSCAN}/address/${address}`}
-              target="_blank"
-              rel="noopener"
-              className="mt-4 inline-block text-xs font-semibold text-green-100 underline hover:text-white"
-            >
-              View wallet on Celoscan ↗
-            </a>
           </>
         ) : (
-          <p className="mt-4 text-sm text-green-50">
-            Connect your wallet above to see your balances.
+          /* Neutral pre-connect state: a muted dash, no instruction text. */
+          <p className="mt-3 text-4xl font-extrabold tracking-tight text-green-200">
+            —
           </p>
         )}
+
+        {/* Coin selector — a row at the bottom of the card, logo +
+            symbol only, no chevron. Tapping it opens the picker
+            sheet. Separate tap target from the balance above; it
+            never toggles hide/show. Shown whether connected or not,
+            so the card keeps its shape before connecting. */}
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={pickerOpen}
+          aria-label={`Balance currency: ${selected.symbol}. Tap to change currency.`}
+          className="mt-5 flex w-full items-center gap-3 border-t border-white/20 pt-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        >
+          <CoinIcon coin={selected} size={32} />
+          <span className="text-sm font-semibold text-white">
+            {selected.symbol}
+          </span>
+        </button>
       </section>
 
       {/* MiniPay-style currency picker: white bottom sheet with rounded
-          top corners, one row per coin. */}
+          top corners, one row per coin with its real logo. */}
       {pickerOpen && (
         <div
           className="fixed inset-0 z-50"
