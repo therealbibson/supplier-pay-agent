@@ -62,3 +62,46 @@ export function formatDecimalAmount(value: string): string {
 export function formatTokenAmount(raw: bigint, decimals: number): string {
   return formatDecimalAmount(formatUnits(raw, decimals));
 }
+
+/**
+ * Format an amount to exactly 2 decimal places (rounded, with thousands
+ * separators), e.g. "49.95". Used for the USDT-equivalent line on the
+ * balance card ("≈ $49.95"). Display-only, like formatDecimalAmount.
+ */
+export function formatTwoDecimals(value: string): string {
+  const s = value.trim();
+  if (s === "" || s === "-" || Number.isNaN(Number(s))) return "0.00";
+  let neg = false;
+  let rest = s;
+  if (rest.startsWith("-")) {
+    neg = true;
+    rest = rest.slice(1);
+  }
+  const [wholeRaw = "0", fracRaw = ""] = rest.split(".");
+  let whole = wholeRaw.replace(/^0+(?=\d)/, "") || "0";
+  let frac = fracRaw;
+
+  // Round the fraction to 2 places.
+  if (frac.length > 2) {
+    const keep = frac.slice(0, 2);
+    const nextDigit = frac.charCodeAt(2) - 48;
+    if (nextDigit >= 5) {
+      const n = BigInt(keep || "0") + 1n;
+      if (n >= 100n) {
+        whole = (BigInt(whole) + 1n).toString();
+        frac = "00";
+      } else {
+        frac = n.toString().padStart(2, "0");
+      }
+    } else {
+      frac = keep;
+    }
+  }
+
+  // Pad to exactly 2 places.
+  while (frac.length < 2) frac += "0";
+
+  // Thousands separators on the whole part.
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${neg ? "-" : ""}${grouped}.${frac}`;
+}

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAccount, usePublicClient } from "wagmi";
-import { CELOSCAN, TOKENS } from "@/lib/config";
+import { formatUnits } from "viem";
+import { CELOSCAN, CHAIN, TOKENS } from "@/lib/config";
 import { tokenBalance, tokenDecimals } from "@/lib/execute";
-import { formatTokenAmount } from "@/lib/format";
+import { formatTokenAmount, formatTwoDecimals } from "@/lib/format";
+import { previewQuote } from "@/lib/textile";
 import { COINS, CoinIcon, CoinPicker, type CoinDef, type CoinKey } from "./CoinPicker";
 
 function shortAddress(address: string) {
@@ -52,6 +54,11 @@ const COIN_KEY = "paybridge.balanceCoin";
  *   sign only (e.g. "$10.00", "₦72,214.83") — no trailing currency
  *   code; the selector row shows which coin is selected. Hidden
  *   balance shows sign + dots only (e.g. "₦ ••••••").
+ * - Under the big balance, a small not-bold line shows what the
+ *   balance is worth in USDT (e.g. "≈ $49.95"), MiniPay-style —
+ *   only for a non-USD₮ coin with a real balance and a Textile
+ *   preview quote; hidden balances show "≈ ••••••" instead, and a
+ *   missing quote shows no line at all.
  * - Type: Inter, loaded self-hosted via next/font/google in
  *   app/layout.tsx (CSS variable --font-inter, wired to --font-sans in
  *   globals.css). MiniPay's exact font family could not be identified
@@ -160,6 +167,62 @@ export function WalletBalances({ onReceive }: { onReceive: () => void }) {
   const selectedDecimals = decimals[coin];
   const celoBalance = balances.CELO ?? null;
 
+  // USDT equivalent of the selected coin's balance — the small line
+  // under the big balance, MiniPay-style ("≈ $49.95"). Fetched from
+  // the app's own Textile preview: sell the full balance of the
+  // selected coin for USD₮. Only for a non-USD₮ coin with a real
+  // balance; no quote (or an error) means no line at all, never a
+  // placeholder, zero, or broken value. A stale reply for an old
+  // coin/balance is dropped via the request id.
+  const [usdtEquivalent, setUsdtEquivalent] = useState<bigint | null>(null);
+  const usdtReqRef = useRef(0);
+  const usdtDecimals = decimals["USD_T"];
+
+  useEffect(() => {
+    const sellToken = selected.token ? TOKENS[selected.token] : undefined;
+    if (
+      !isConnected ||
+      !address ||
+      coin === "USD_T" ||
+      !sellToken ||
+      selectedBalance === null ||
+      selectedBalance === 0n ||
+      selectedDecimals === undefined ||
+      usdtDecimals === undefined
+    ) {
+      usdtReqRef.current += 1; // invalidate any in-flight fetch
+      setUsdtEquivalent(null);
+      return;
+    }
+    const reqId = ++usdtReqRef.current;
+    void (async () => {
+      try {
+        const p = await previewQuote({
+          chainId: CHAIN.id,
+          sellToken,
+          buyToken: TOKENS.USD_T,
+          sellAmount: selectedBalance.toString(),
+        });
+        if (usdtReqRef.current !== reqId) return; // stale response
+        if (!p || BigInt(p.buyAmount) <= 0n) {
+          setUsdtEquivalent(null);
+          return;
+        }
+        setUsdtEquivalent(BigInt(p.buyAmount));
+      } catch {
+        if (usdtReqRef.current !== reqId) return;
+        setUsdtEquivalent(null); // no quote, no line — never an error state
+      }
+    })();
+  }, [
+    isConnected,
+    address,
+    coin,
+    selectedBalance,
+    selectedDecimals,
+    usdtDecimals,
+  ]);
+
   function formatAmount(
     value: bigint | null,
     dec: number | undefined,
@@ -219,6 +282,22 @@ export function WalletBalances({ onReceive }: { onReceive: () => void }) {
             >
               {formatAmount(selectedBalance, selectedDecimals, selected.symbol)}
             </button>
+            {/* MiniPay-style equivalent value: small, not bold, directly
+                under the big balance. Only for a non-USD₮ coin with a
+                real balance: hidden balances show the masked line, a
+                missing quote shows nothing at all. */}
+            {coin !== "USD_T" &&
+              selectedBalance !== null &&
+              selectedBalance > 0n &&
+              (hidden || usdtEquivalent !== null) && (
+                <p className="mt-1 text-sm font-normal text-white/80 tabular-nums">
+                  {hidden
+                    ? "≈ ••••••"
+                    : usdtEquivalent !== null && usdtDecimals !== undefined
+                      ? `≈ $${formatTwoDecimals(formatUnits(usdtEquivalent, usdtDecimals))}`
+                      : null}
+                </p>
+              )}
             <p className="mt-2 text-xs text-white/70">
               {hidden ? "Tap balance to show" : "Tap balance to hide"}
             </p>
