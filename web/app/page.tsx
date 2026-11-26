@@ -8,7 +8,6 @@ import { BottomNav } from "@/components/BottomNav";
 import { WalletBalances } from "@/components/WalletBalances";
 import { RecentPayments } from "@/components/RecentPayments";
 import { GITHUB_REPO } from "@/lib/config";
-import Link from "next/link";
 
 /**
  * Home is the wallet itself: balances, send, activity, trust strip.
@@ -38,52 +37,9 @@ export default function Home() {
       <Header />
 
       <main className="mx-auto max-w-lg px-4 pb-10 pt-6">
-        <WalletBalances />
-
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <Link
-            href="/send"
-            className="flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-4 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-green-700"
-          >
-            <svg
-              width={18}
-              height={18}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22 2 15 22 11 13 2 9 22 2" />
-            </svg>
-            Send
-          </Link>
-          <button
-            type="button"
-            onClick={() => setShowReceive((v) => !v)}
-            aria-expanded={showReceive}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-green-600 bg-white px-4 py-3.5 text-sm font-bold text-green-700 shadow-sm transition hover:bg-green-50"
-          >
-            <svg
-              width={18}
-              height={18}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22 2 15 22 11 13 2 9 22 2" transform="rotate(180 12 12)" />
-            </svg>
-            Receive
-          </button>
-        </div>
+        {/* Send / Receive live inside the balance card now, like
+            MiniPay's Add cash / Withdraw pills. */}
+        <WalletBalances onReceive={() => setShowReceive(true)} />
 
         <div className="mt-8">
           <RecentPayments />

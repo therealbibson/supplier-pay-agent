@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useAccount, usePublicClient } from "wagmi";
 import { CELOSCAN, TOKENS } from "@/lib/config";
 import { tokenBalance, tokenDecimals } from "@/lib/execute";
@@ -22,16 +23,24 @@ const HIDE_KEY = "paybridge.hideBalances";
 const COIN_KEY = "paybridge.balanceCoin";
 
 /**
- * Wallet balance card — the top of a normal wallet home screen, in the
- * MiniPay style: a green card with the "Total" label at the top, the big
- * balance in the middle, and the coin selector as a row at the bottom
- * of the card (logo + symbol + a small down-chevron, like MiniPay)
- * that opens the picker.
- *
- * - Coin picker: tapping the bottom row opens a bottom sheet listing all
- *   eight coins with their real logos and balances; tapping a coin
- *   selects it and closes the sheet. The choice persists in
- *   localStorage. No native <select> anywhere.
+ * Wallet balance card — rebuilt to look like MiniPay's balance card,
+ * grounded in MiniPay's own home-screen image from minipay.xyz
+ * (app-screen.webp, downloaded and viewed 26 Nov 2026):
+ * - The exact green sampled from that card: #06955e (with soft
+ *   lighter-green circles in the background, sampled #1da06f-ish,
+ *   rendered as white at low opacity), large rounded corners.
+ * - "Total" label, small white regular text at the top left; the big
+ *   amount in white, very large and bold, left-aligned under it.
+ * - Send / Receive as outline pills INSIDE the card, below the amount,
+ *   like MiniPay's Add cash / Withdraw pills: white border,
+ *   translucent fill, white circle with a green arrow. Receive
+ *   (money in, down arrow) first, Send (money out, up-right arrow)
+ *   second, as in MiniPay.
+ * - Coin picker: the bottom row of the card (logo + symbol + small
+ *   down-chevron) opens the bottom sheet listing all eight coins with
+ *   their real logos and balances; tapping a coin selects it and
+ *   closes the sheet. The choice persists in localStorage. No native
+ *   <select> anywhere.
  * - Hide/show: there is no eye icon — tapping the big balance number
  *   itself toggles between the amount and "••••••", with a small hint
  *   underneath so the action is discoverable. The choice persists in
@@ -41,18 +50,21 @@ const COIN_KEY = "paybridge.balanceCoin";
  *   coin's balance is listed.
  * - Amounts are shown with 2–4 decimal places (see lib/format.ts),
  *   sign only (e.g. "$10.00", "₦72,214.83") — no trailing currency
- *   code; the selector row shows which coin is selected.
+ *   code; the selector row shows which coin is selected. Hidden
+ *   balance shows sign + dots only (e.g. "₦ ••••••").
  * - Type: Inter, loaded self-hosted via next/font/google in
  *   app/layout.tsx (CSS variable --font-inter, wired to --font-sans in
- *   globals.css). The card applies it explicitly via font-sans so the
- *   card's type stays Inter even if the app default ever changes;
- *   amounts use tabular figures so digits line up.
+ *   globals.css). MiniPay's exact font family could not be identified
+ *   from any public source, so Inter stands in. The card applies it
+ *   explicitly via font-sans so the card's type stays Inter even if
+ *   the app default ever changes; amounts use tabular figures so
+ *   digits line up.
  * - Gated on connection: before the user connects, the card shows a
  *   neutral state — "Total" label, a muted "—" where the balance goes,
  *   and the coin selector row at the bottom — with no instruction text
  *   and no chain call made.
  */
-export function WalletBalances() {
+export function WalletBalances({ onReceive }: { onReceive: () => void }) {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const [hidden, setHidden] = useState(false);
@@ -164,17 +176,27 @@ export function WalletBalances() {
 
   return (
     <>
-      <section className="rounded-3xl bg-green-600 p-6 font-sans text-white shadow-md">
+      <section className="relative overflow-hidden rounded-[28px] bg-[#06955e] p-6 font-sans text-white shadow-md">
+        {/* MiniPay's card has soft lighter-green circles in the
+            background — one top-left behind the label, one
+            bottom-right. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -left-20 -top-28 h-64 w-64 rounded-full bg-white/[0.07]"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-24 -right-12 h-56 w-56 rounded-full bg-white/[0.07]"
+        />
+        <div className="relative">
         <div className="flex items-start justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-widest text-green-100">
-            Total
-          </p>
+          <p className="text-base font-normal text-white">Total</p>
           {isConnected && address && (
             <a
               href={`${CELOSCAN}/address/${address}`}
               target="_blank"
               rel="noopener"
-              className="font-mono text-xs text-green-100 underline hover:text-white"
+              className="font-mono text-xs text-white/80 underline hover:text-white"
             >
               {shortAddress(address)} ↗
             </a>
@@ -193,16 +215,16 @@ export function WalletBalances() {
                   : `Balance ${formatAmount(selectedBalance, selectedDecimals, selected.symbol)}. Tap to hide balance.`
               }
               title={hidden ? "Tap to show balance" : "Tap to hide balance"}
-              className="mt-3 block cursor-pointer rounded-lg text-left text-4xl font-extrabold tracking-tight tabular-nums focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+              className="mt-2 block cursor-pointer rounded-lg text-left text-5xl font-bold leading-none tracking-tight tabular-nums focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
             >
               {formatAmount(selectedBalance, selectedDecimals, selected.symbol)}
             </button>
-            <p className="mt-1 text-xs text-green-200">
+            <p className="mt-2 text-xs text-white/70">
               {hidden ? "Tap balance to show" : "Tap balance to hide"}
             </p>
 
             {!hidden && celoBalance !== null && celoBalance === 0n && (
-              <p className="mt-3 rounded-xl bg-green-700 px-3 py-2 text-xs text-green-50">
+              <p className="mt-3 rounded-xl bg-[#047857] px-3 py-2 text-xs text-white/90">
                 Your CELO balance is 0 — you need a little CELO to pay for gas
                 before you can send anything.
               </p>
@@ -210,10 +232,62 @@ export function WalletBalances() {
           </>
         ) : (
           /* Neutral pre-connect state: a muted dash, no instruction text. */
-          <p className="mt-3 text-4xl font-extrabold tracking-tight tabular-nums text-green-200">
+          <p className="mt-2 text-5xl font-bold leading-none tracking-tight tabular-nums text-white/60">
             —
           </p>
         )}
+
+        {/* Send / Receive — inside the card, like MiniPay's Add cash /
+            Withdraw pills: white outline, translucent fill, white
+            circle with a green arrow. Receive (money in) first,
+            Send (money out) second, as in MiniPay. */}
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={onReceive}
+            className="flex items-center justify-center gap-2 rounded-full border border-white/60 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-[#06955e]">
+              <svg
+                width={14}
+                height={14}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 5v14" />
+                <path d="m19 12-7 7-7-7" />
+              </svg>
+            </span>
+            Receive
+          </button>
+          <Link
+            href="/send"
+            className="flex items-center justify-center gap-2 rounded-full border border-white/60 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-[#06955e]">
+              <svg
+                width={14}
+                height={14}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M7 17 17 7" />
+                <path d="M7 7h10v10" />
+              </svg>
+            </span>
+            Send
+          </Link>
+        </div>
 
         {/* Coin selector — a row at the bottom of the card, logo +
             symbol + a small down-chevron, so users can tell it opens a
@@ -235,7 +309,7 @@ export function WalletBalances() {
           </span>
           <svg
             aria-hidden="true"
-            className="h-4 w-4 text-green-200"
+            className="h-4 w-4 text-white/70"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -246,6 +320,7 @@ export function WalletBalances() {
             <path d="m6 9 6 6 6-6" />
           </svg>
         </button>
+        </div>
       </section>
 
       {/* MiniPay-style currency picker (shared with the Send screen). */}
